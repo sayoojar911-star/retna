@@ -3,12 +3,10 @@ import { Layers, Clock, AlertCircle, Eye } from 'lucide-react';
 
 interface ExplainabilitySectionProps {
   originalHeatmap?: string;
-  hasTrainedModel?: boolean;
 }
 
 export const ExplainabilitySection: React.FC<ExplainabilitySectionProps> = ({
   originalHeatmap,
-  hasTrainedModel = false,
 }) => {
   return (
     <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-6 shadow-sm">

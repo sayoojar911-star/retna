@@ -133,46 +133,54 @@ cd ..
 
 ---
 
-## Running the Application
+## Running the Application (10 PM Checkpoint Demo)
 
-### 1. Run PostgreSQL Database (Docker)
-```bash
-docker compose up -d postgres
-```
-*Note: If running in an environment without Docker, the backend can be configured with SQLite for offline development or connected to a remote PostgreSQL instance via `DATABASE_URL` in `.env`.*
+### 1. Prerequisites
+- Python 3.10+ (tested on Python 3.12)
+- Node.js 18+ (tested on Node v20/24) & npm
 
-### 2. Run the Backend (FastAPI)
+### 2. Backend Setup & Startup (FastAPI)
 From the project root:
 ```bash
-# Windows
-.\venv\Scripts\python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+# Windows (PowerShell)
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r backend/requirements.txt
+pip install -r ml/requirements.txt
 
-# Linux / macOS
-python -m uvicorn backend.app.main:app --reload --host 0.0.0.0 --port 8000
+# Start backend server
+.\venv\Scripts\python -m uvicorn backend.app.main:app --reload --host 127.0.0.1 --port 8000
 ```
-- Interactive Swagger API Documentation: `http://localhost:8000/docs`
-- Health check endpoint: `http://localhost:8000/health`
+- Interactive Swagger API Documentation: `http://127.0.0.1:8000/docs`
+- Health check endpoint: `http://127.0.0.1:8000/health`
 
-### 3. Run the Frontend (Vite)
-From the project root:
+### 3. Frontend Setup & Startup (React + Vite)
+In a second terminal, from the project root:
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
-Open your browser at `http://localhost:5173`. The UI will perform live polling of the backend health endpoint and display connection status.
+Open your browser at `http://localhost:5173`.
 
 ---
 
-## Running Tests
+## Bundled Research Demo Cases
+To make the checkpoint immediately demonstrable without needing to download large datasets, 3 verified demo samples are included under `data/demo_samples/`:
+1. **Case GDP-0002 — Normal Control**: Verified 225×225 RNFLT map, normal bilateral neuroretinal rim, non-glaucoma ground truth.
+2. **Case GDP-0001 — Confirmed Glaucoma**: Verified 225×225 RNFLT map showing inferior/superior axonal bundle thinning.
+3. **Quality Reject Demo — Corrupted NaN Array**: Demonstrates automated QA gate rejection with transparent clinical rejection reasoning.
 
-### Backend Tests
-Execute pytest from the project root:
+---
+
+## Running the Automated Test Suite
+
+Run the full pytest suite (30 passing tests):
 ```bash
-.\venv\Scripts\pytest
+.\venv\Scripts\pytest -v
 ```
 
-### Frontend Build Verification
-Verify TypeScript types and Vite production build:
+Verify frontend TypeScript compilation:
 ```bash
 cd frontend
 npm run build
@@ -180,15 +188,18 @@ npm run build
 
 ---
 
-## Current Implementation Status (Step 1 Complete)
+## Checkpoint Status (10 PM Checkpoint Demo Ready)
 
-- [x] Monorepo folder hierarchy created
-- [x] Python virtual environment configured
-- [x] FastAPI backend application with CORS and `/health` endpoint implemented
-- [x] PostgreSQL service defined via `docker-compose.yml`
-- [x] SQLAlchemy & Alembic configuration initialized
-- [x] React + TypeScript + Vite frontend created with live health check polling
-- [x] Backend test suite implemented and passing (3/3 tests)
-- [x] `.gitignore` and `.env.example` configured
-- [x] Architecture specification and medical safety guidelines documented
-- [ ] *Next Step*: Dataset selection and preprocessing pipeline (awaiting user instruction)
+- [x] Complete clinical research dashboard UI (React + Tailwind CSS + Lucide)
+- [x] Live backend telemetry and GPU hardware detection
+- [x] Real OCT/RNFLT ingestion (`.npz`, `.npy`, `.png`, `.jpg`) and file integrity checks
+- [x] Automated 6-point Quality Control gate with PASS/FAIL state badges
+- [x] True 225×225 RNFLT thickness colormap visualization (0–250 µm)
+- [x] 6 derived physiological thickness metrics calculated from matrix data
+- [x] Bundled research demo case selector (Normal, Glaucoma, Corrupt QA reject)
+- [x] AI Model Pipeline status tracking with transparent "Training Pending" notice
+- [x] 3-panel Grad-CAM UI layout ready in clean "Awaiting trained model" state
+- [x] Multi-horizon (6–24M) progression forecasting UI in honest disabled state
+- [x] 7-point Clinical Safety & Validation checklist
+- [x] 30/30 automated unit and integration tests passing
+

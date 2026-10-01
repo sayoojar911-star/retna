@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShieldAlert, ShieldCheck, CheckCircle2, Clock, AlertTriangle, Lock } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, CheckCircle2, Clock } from 'lucide-react';
 import { SafetyLayerAudit } from '../types';
 
 interface SafetyLayerCardProps {

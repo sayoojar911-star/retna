@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cpu, ArrowRight, Clock, AlertCircle, HardDrive, CheckCircle2 } from 'lucide-react';
+import { Cpu, Clock, AlertCircle, HardDrive, CheckCircle2 } from 'lucide-react';
 import { BackendModelStatus } from '../types';
 
 interface ModelStatusSectionProps {

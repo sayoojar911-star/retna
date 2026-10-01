@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, FileText, CheckCircle2, AlertTriangle, ArrowRight, Shield } from 'lucide-react';
+import { Upload, FileText, CheckCircle2, ArrowRight } from 'lucide-react';
 import { DemoCase } from '../types';
 
 interface ImportSectionProps {

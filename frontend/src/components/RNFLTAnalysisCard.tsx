@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eye, Layers, BarChart3, Info } from 'lucide-react';
+import { Eye, Layers, Info } from 'lucide-react';
 import { RNFLTAnalysis } from '../types';
 
 interface RNFLTAnalysisCardProps {

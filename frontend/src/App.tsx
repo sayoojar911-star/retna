@@ -8,7 +8,7 @@ import { ProgressionForecastSection } from './components/ProgressionForecastSect
 import { SafetyLayerCard } from './components/SafetyLayerCard';
 import { ImportSection } from './components/ImportSection';
 import { OCTAnalysisResponse, DemoCase, BackendModelStatus } from './types';
-import { AlertCircle, RefreshCw, Layers, ShieldCheck, Activity, Eye, Cpu } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
@@ -208,7 +208,6 @@ export const App: React.FC = () => {
             {/* Explainability (Grad-CAM Preparation) */}
             <ExplainabilitySection
               originalHeatmap={currentAnalysis?.rnflt_analysis?.heatmap_image}
-              hasTrainedModel={false}
             />
 
             {/* Progression Forecasting (Longitudinal) */}
@@ -237,7 +236,6 @@ export const App: React.FC = () => {
             <ModelStatusSection modelStatus={modelStatus} />
             <ExplainabilitySection
               originalHeatmap={currentAnalysis?.rnflt_analysis?.heatmap_image}
-              hasTrainedModel={false}
             />
           </div>
         )}
