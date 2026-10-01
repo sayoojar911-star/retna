@@ -5,7 +5,7 @@ and data completeness. Does NOT implement subjective medical-quality grading.
 """
 
 import os
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
 from PIL import Image
 
@@ -18,6 +18,12 @@ class ValidationResult(BaseModel):
     status: QualityStatus
     issues: List[str] = Field(default_factory=list)
     image_shape: Optional[List[int]] = None
+    validation_stages: List[Dict[str, Any]] = Field(default_factory=list)
+
+    @property
+    def quality_verdict_display(self) -> str:
+        """Standardized clinician-facing quality display."""
+        return "Scan quality: Valid" if self.is_valid else "Scan quality: Unable to analyze"
 
 
 class TechnicalValidator:

@@ -14,6 +14,7 @@ from ml.preprocessing.base_loader import BaseDataLoader
 from ml.preprocessing.image_loader import StandardImageLoader
 from ml.preprocessing.metadata_loader import MetadataLoader
 from ml.preprocessing.harvard_gdp_loader import HarvardGDPLoader
+from ml.preprocessing.harvard_gd_loader import HarvardGDLoader, HarvardGDDataset
 from ml.preprocessing.dataset_registry import DatasetRegistry
 from ml.preprocessing.transforms import OCTPreprocessTransform
 from ml.preprocessing.splitter import PatientLevelSplitter, SplitSummary
@@ -33,9 +34,12 @@ __all__ = [
     "StandardImageLoader",
     "MetadataLoader",
     "HarvardGDPLoader",
+    "HarvardGDLoader",
+    "HarvardGDDataset",
     "DatasetRegistry",
     "OCTPreprocessTransform",
     "PatientLevelSplitter",
     "SplitSummary",
     "GlaucoMapDataset",
 ]
+

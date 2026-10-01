@@ -8,6 +8,7 @@ from typing import Callable, Dict, List, Optional
 from ml.preprocessing.base_loader import BaseDataLoader
 from ml.preprocessing.image_loader import StandardImageLoader
 from ml.preprocessing.harvard_gdp_loader import HarvardGDPLoader
+from ml.preprocessing.harvard_gd_loader import HarvardGDLoader
 
 
 class DatasetRegistry:
@@ -46,6 +47,11 @@ DatasetRegistry.register(
     lambda: HarvardGDPLoader(data_dir="data/raw/harvard_gdp")
 )
 DatasetRegistry.register(
+    "harvard_gd",
+    lambda: HarvardGDLoader(data_dir="data/raw/harvard_gd")
+)
+DatasetRegistry.register(
     "gamma",
     lambda: StandardImageLoader(source_name="gamma")
 )
+

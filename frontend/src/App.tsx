@@ -1,84 +1,153 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
+import { ClinicalDashboard } from './components/ClinicalDashboard';
+import { PatientProfile } from './components/PatientProfile';
+import { ScansLibrary } from './components/ScansLibrary';
+import { ReportsLibrary } from './components/ReportsLibrary';
+import { DemoCasesPage } from './components/DemoCasesPage';
+import { RegisterPatientModal } from './components/RegisterPatientModal';
+import { ImportScanModal } from './components/ImportScanModal';
+import { SettingsModal } from './components/SettingsModal';
+import { AddIOPModal } from './components/AddIOPModal';
+import { AddVisualFieldModal } from './components/AddVisualFieldModal';
+import { AddReportModal } from './components/AddReportModal';
+import { LongitudinalCharts } from './components/LongitudinalCharts';
 import { QualityControlCard } from './components/QualityControlCard';
+import { ModelResultCard } from './components/ModelResultCard';
 import { RNFLTAnalysisCard } from './components/RNFLTAnalysisCard';
-import { ModelStatusSection } from './components/ModelStatusSection';
 import { ExplainabilitySection } from './components/ExplainabilitySection';
-import { ProgressionForecastSection } from './components/ProgressionForecastSection';
+import { RawOctResultCard } from './components/RawOctResultCard';
 import { SafetyLayerCard } from './components/SafetyLayerCard';
-import { ImportSection } from './components/ImportSection';
-import { OCTAnalysisResponse, DemoCase, BackendModelStatus } from './types';
-import { AlertCircle } from 'lucide-react';
+import {
+  OCTAnalysisResponse,
+  BackendModelStatus,
+  ClinicalPatient,
+  ClinicalScan,
+  ClinicalReport,
+} from './types';
+import { AlertCircle, Upload, Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>('patients');
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Clinical data states
+  const [patients, setPatients] = useState<ClinicalPatient[]>([]);
+  const [scans, setScans] = useState<ClinicalScan[]>([]);
+  const [reports, setReports] = useState<ClinicalReport[]>([]);
+
+  // System and analysis states
   const [backendConnected, setBackendConnected] = useState<boolean>(false);
-  const [backendChecking, setBackendChecking] = useState<boolean>(false);
   const [modelStatus, setModelStatus] = useState<BackendModelStatus | null>(null);
-  const [demoCases, setDemoCases] = useState<DemoCase[]>([]);
   const [currentAnalysis, setCurrentAnalysis] = useState<OCTAnalysisResponse | null>(null);
   const [analyzing, setAnalyzing] = useState<boolean>(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
 
+  // Modal controls
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [importInitialPatientId, setImportInitialPatientId] = useState<string | undefined>(undefined);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
+  const [isIopModalOpen, setIsIopModalOpen] = useState<boolean>(false);
+  const [isVfModalOpen, setIsVfModalOpen] = useState<boolean>(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
+  const [modalTargetPatientId, setModalTargetPatientId] = useState<string>('GM-DEMO-01');
+
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
-  // 1. Check Backend Health & Fetch Model Status + Demo Cases
+  // 1. Fetch Clinical Data and System Status
   const refreshSystem = useCallback(async () => {
-    setBackendChecking(true);
     setGlobalError(null);
 
     try {
       // Check /health
       const healthRes = await fetch(`${apiBaseUrl}/health`);
-      if (healthRes.ok) {
-        setBackendConnected(true);
-      } else {
-        setBackendConnected(false);
+      setBackendConnected(healthRes.ok);
+
+      // Fetch patients
+      try {
+        const patRes = await fetch(`${apiBaseUrl}/api/patients`).catch(() =>
+          fetch(`${apiBaseUrl}/api/clinical/patients`)
+        );
+        if (patRes.ok) {
+          const pData: ClinicalPatient[] = await patRes.json();
+          setPatients(pData);
+        }
+      } catch (e) {
+        console.warn('Patients fetch notice:', e);
+      }
+
+      // Fetch scans
+      try {
+        const scanRes = await fetch(`${apiBaseUrl}/api/scans`).catch(() =>
+          fetch(`${apiBaseUrl}/api/clinical/scans`)
+        );
+        if (scanRes.ok) {
+          const sData: ClinicalScan[] = await scanRes.json();
+          setScans(sData);
+        }
+      } catch (e) {
+        console.warn('Scans fetch notice:', e);
+      }
+
+      // Fetch reports
+      try {
+        const repRes = await fetch(`${apiBaseUrl}/api/reports`).catch(() =>
+          fetch(`${apiBaseUrl}/api/clinical/reports`)
+        );
+        if (repRes.ok) {
+          const rData: ClinicalReport[] = await repRes.json();
+          setReports(rData);
+        }
+      } catch (e) {
+        console.warn('Reports fetch notice:', e);
       }
 
       // Fetch model status
       try {
-        const modelRes = await fetch(`${apiBaseUrl}/api/v1/model/status`);
+        const modelRes = await fetch(`${apiBaseUrl}/api/model/status`).catch(() =>
+          fetch(`${apiBaseUrl}/api/v1/model/status`)
+        );
         if (modelRes.ok) {
           const mData: BackendModelStatus = await modelRes.json();
           setModelStatus(mData);
         }
       } catch (e) {
-        console.warn('Model status fetch failed:', e);
-      }
-
-      // Fetch demo cases
-      try {
-        const demoRes = await fetch(`${apiBaseUrl}/api/v1/oct/demo-cases`);
-        if (demoRes.ok) {
-          const dData: DemoCase[] = await demoRes.json();
-          setDemoCases(dData);
-        }
-      } catch (e) {
-        console.warn('Demo cases fetch failed:', e);
+        console.warn('Model status fetch notice:', e);
       }
     } catch (err: unknown) {
       setBackendConnected(false);
       if (err instanceof Error) {
-        setGlobalError(`Backend connection failed: ${err.message}`);
+        setGlobalError(`Backend service notice: ${err.message}`);
       } else {
         setGlobalError('Unable to connect to GlaucoMap backend.');
       }
-    } finally {
-      setBackendChecking(false);
     }
   }, [apiBaseUrl]);
 
-  // 2. Analyze Uploaded FormData
+  // Initial load
+  useEffect(() => {
+    refreshSystem();
+  }, [refreshSystem]);
+
+  // 2. Analyze Uploaded Study
   const handleAnalyze = async (formData: FormData) => {
     setAnalyzing(true);
     setGlobalError(null);
 
     try {
-      const response = await fetch(`${apiBaseUrl}/api/v1/oct/analyze`, {
+      let response = await fetch(`${apiBaseUrl}/api/analyze`, {
         method: 'POST',
         body: formData,
       });
+
+      if (response.status === 404) {
+        response = await fetch(`${apiBaseUrl}/api/v1/oct/analyze`, {
+          method: 'POST',
+          body: formData,
+        });
+      }
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
@@ -87,7 +156,8 @@ export const App: React.FC = () => {
 
       const data: OCTAnalysisResponse = await response.json();
       setCurrentAnalysis(data);
-      setActiveTab('dashboard'); // Switch to analysis view
+      setActiveTab('analysis'); // Switch cleanly to analysis view
+      refreshSystem(); // Refresh clinical registries
     } catch (err: unknown) {
       if (err instanceof Error) {
         setGlobalError(err.message);
@@ -106,154 +176,363 @@ export const App: React.FC = () => {
     await handleAnalyze(fd);
   };
 
-  // Initial load
-  useEffect(() => {
-    refreshSystem();
-  }, [refreshSystem]);
-
-  // Once backend is confirmed connected, auto-load first demo case if no analysis is present
-  useEffect(() => {
-    if (backendConnected && !currentAnalysis && demoCases.length > 0) {
-      handleSelectDemoCase(demoCases[0].id);
+  // 4. Select Scan for Analysis
+  const handleSelectScanForAnalysis = async (scan: ClinicalScan) => {
+    if (scan.demo_case_id) {
+      await handleSelectDemoCase(scan.demo_case_id);
+    } else {
+      setActiveTab('analysis');
     }
-  }, [backendConnected, demoCases]);
+  };
+
+  // 5. Open Import Modal for Specific Patient
+  const handleOpenImportModalForPatient = (patientId: string) => {
+    setImportInitialPatientId(patientId);
+    setIsImportModalOpen(true);
+  };
+
+  // Filtered patients for search query
+  const displayedPatients = searchQuery
+    ? patients.filter(
+        (p) =>
+          p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          p.id.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : patients;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between selection:bg-teal-500 selection:text-white font-sans antialiased">
-      {/* Navigation Header */}
+    <div className="min-h-screen bg-slate-100/90 text-slate-800 flex flex-col justify-between font-sans antialiased selection:bg-teal-500 selection:text-white">
+      {/* Top Application Bar */}
       <Header
-        backendConnected={backendConnected}
-        backendChecking={backendChecking}
-        gpuName={modelStatus?.hardware.gpu_name || 'NVIDIA RTX 4050 (6GB)'}
-        onRefresh={refreshSystem}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          if (tab !== 'patients') {
+            // keep state clean
+          }
+        }}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
+        onQuickAction={() => setIsRegisterModalOpen(true)}
       />
 
-      {/* Main Container */}
-      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 flex-1 space-y-6">
+      {/* Main Clinical Workspace Shell */}
+      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 flex-1 space-y-6">
         {/* Global Error Banner */}
         {globalError && (
-          <div className="bg-rose-950/60 border border-rose-900 rounded-xl p-4 text-rose-300 text-xs flex items-start space-x-3 shadow-sm">
-            <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-rose-800 text-xs flex items-start space-x-3 shadow-sm">
+            <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
             <div>
-              <div className="font-semibold text-rose-200">System Notification</div>
-              <div className="mt-0.5 text-slate-400">{globalError}</div>
+              <div className="font-semibold text-rose-900">Workstation Notice</div>
+              <div className="mt-0.5 text-slate-600">{globalError}</div>
             </div>
           </div>
         )}
 
-        {/* VIEW 1: MAIN DASHBOARD & RECENT ANALYSIS */}
-        {activeTab === 'dashboard' && (
-          <div className="space-y-6">
-            {/* Top Quick Status Bar */}
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="flex items-center space-x-2">
-                <span className="text-slate-400">Active Study:</span>
-                <span className="font-semibold text-white font-mono bg-slate-950 px-2 py-0.5 rounded border border-slate-800">
-                  {currentAnalysis?.patient_context?.patient_id || 'Awaiting Study'}
-                </span>
-                <span className="text-slate-400 ml-2">Eye:</span>
-                <span className="font-semibold text-teal-400 font-mono">
-                  {currentAnalysis?.patient_context?.eye || 'OD'}
-                </span>
-              </div>
-
-              <div className="flex items-center space-x-3 text-slate-400">
-                <span>
-                  Validation:{' '}
-                  <strong className={currentAnalysis?.status === 'PASS' ? 'text-emerald-400' : 'text-rose-400'}>
-                    {currentAnalysis?.quality_status || 'Pending'}
-                  </strong>
-                </span>
-                <span>&bull;</span>
-                <span>
-                  Model:{' '}
-                  <strong className="text-amber-400 font-normal">
-                    Training Pending
-                  </strong>
-                </span>
-                <button
-                  onClick={() => setActiveTab('import')}
-                  className="px-2.5 py-1 rounded bg-teal-500/10 text-teal-300 hover:bg-teal-500/20 border border-teal-500/30 transition text-[11px] font-medium"
-                >
-                  Import New Study
-                </button>
-              </div>
-            </div>
-
-            {/* Quality Control Card */}
-            {currentAnalysis && (
-              <QualityControlCard
-                status={currentAnalysis.status}
-                qualityStatus={currentAnalysis.quality_status}
-                message={currentAnalysis.message}
-                checks={currentAnalysis.validation_checks}
-                issues={currentAnalysis.issues}
+        {/* ========================================================= */}
+        {/* 1. PATIENTS / HOME TIMELINE DASHBOARD                     */}
+        {/* ========================================================= */}
+        {activeTab === 'patients' && (
+          <div>
+            {selectedPatientId ? (
+              <PatientProfile
+                patientId={selectedPatientId}
+                onBack={() => setSelectedPatientId(null)}
+                onSelectScanForAnalysis={handleSelectScanForAnalysis}
+                onOpenImportModalForPatient={handleOpenImportModalForPatient}
+                apiBaseUrl={apiBaseUrl}
+                activeAnalysis={currentAnalysis}
+              />
+            ) : (
+              <ClinicalDashboard
+                patients={displayedPatients}
+                scans={scans}
+                reports={reports}
+                onSelectPatient={(pId) => setSelectedPatientId(pId)}
+                onSelectScanForAnalysis={handleSelectScanForAnalysis}
+                onOpenRegisterModal={() => setIsRegisterModalOpen(true)}
+                onOpenImportModal={() => {
+                  setImportInitialPatientId(undefined);
+                  setIsImportModalOpen(true);
+                }}
+                onOpenAddIOPModal={(pId) => {
+                  setModalTargetPatientId(pId || patients[0]?.id || 'GM-DEMO-01');
+                  setIsIopModalOpen(true);
+                }}
+                onOpenAddVFModal={(pId) => {
+                  setModalTargetPatientId(pId || patients[0]?.id || 'GM-DEMO-01');
+                  setIsVfModalOpen(true);
+                }}
+                onOpenAddReportModal={(pId) => {
+                  setModalTargetPatientId(pId || patients[0]?.id || 'GM-DEMO-01');
+                  setIsReportModalOpen(true);
+                }}
+                onNavigateToDemoCases={() => setActiveTab('demo-cases')}
+                onNavigateToProgression={() => setActiveTab('progression')}
               />
             )}
+          </div>
+        )}
 
-            {/* RNFLT Quantitative Map Visualization */}
-            {currentAnalysis?.is_valid && (
-              <RNFLTAnalysisCard
-                analysis={currentAnalysis.rnflt_analysis}
-                patientId={currentAnalysis.patient_context?.patient_id}
-                eye={currentAnalysis.patient_context?.eye}
-              />
+        {/* ========================================================= */}
+        {/* 2. SCANS LIBRARY                                          */}
+        {/* ========================================================= */}
+        {activeTab === 'scans' && (
+          <ScansLibrary
+            scans={scans}
+            onOpenImportModal={() => {
+              setImportInitialPatientId(undefined);
+              setIsImportModalOpen(true);
+            }}
+            onSelectScanForAnalysis={handleSelectScanForAnalysis}
+            onSelectPatient={(pId) => {
+              setSelectedPatientId(pId);
+              setActiveTab('patients');
+            }}
+          />
+        )}
+
+        {/* ========================================================= */}
+        {/* 3. REPORTS LIBRARY                                        */}
+        {/* ========================================================= */}
+        {activeTab === 'reports' && (
+          <ReportsLibrary
+            reports={reports}
+            patients={patients}
+            onOpenAddReportModal={() => {
+              setModalTargetPatientId(patients[0]?.id || 'GM-DEMO-01');
+              setIsReportModalOpen(true);
+            }}
+            onSelectPatient={(pId) => {
+              setSelectedPatientId(pId);
+              setActiveTab('patients');
+            }}
+          />
+        )}
+
+        {/* ========================================================= */}
+        {/* 4. AI STRUCTURAL ANALYSIS VIEW                            */}
+        {/* ========================================================= */}
+        {activeTab === 'analysis' && (
+          <div className="space-y-6">
+            {currentAnalysis ? (
+              <>
+                {/* Clinical Context Bar */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-slate-500 font-medium">Modality:</span>
+                    <span className="font-semibold text-slate-900 font-mono bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
+                      {currentAnalysis.input_type_display ||
+                        (currentAnalysis.input_type === 'raw_oct'
+                          ? 'Raw / Digital OCT Study'
+                          : 'RNFLT Numerical Map')}
+                    </span>
+                    <span className="text-slate-500 font-medium ml-2">Patient ID:</span>
+                    <span className="font-semibold text-teal-800 font-mono bg-teal-50 px-2.5 py-0.5 rounded-lg border border-teal-200">
+                      {currentAnalysis.patient_context?.patient_id || 'Awaiting Study'}
+                    </span>
+                    <span className="text-slate-500 font-medium ml-2">Eye:</span>
+                    <span className="font-bold text-teal-800 font-mono">
+                      {currentAnalysis.patient_context?.eye || 'OD'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setIsImportModalOpen(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-sm transition flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Import Another Scan</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quality Verification Card */}
+                <QualityControlCard
+                  status={currentAnalysis.status}
+                  qualityStatus={currentAnalysis.quality_status}
+                  message={currentAnalysis.message}
+                  checks={currentAnalysis.validation_checks}
+                  issues={currentAnalysis.issues}
+                />
+
+                {/* Conditional Rendering Based on Modality */}
+                {currentAnalysis.input_type === 'raw_oct' ? (
+                  /* PATH B: Raw OCT Cross-Section */
+                  <RawOctResultCard
+                    rawStudy={currentAnalysis.raw_oct_study}
+                    aiAnalysis={currentAnalysis.ai_analysis}
+                    patientContext={currentAnalysis.patient_context}
+                    filename={currentAnalysis.filename}
+                  />
+                ) : (
+                  /* PATH A: RNFLT Numerical Map */
+                  <>
+                    <ModelResultCard
+                      modelResult={currentAnalysis.model_result}
+                      patientContext={currentAnalysis.patient_context}
+                      groundTruth={currentAnalysis.research_ground_truth}
+                      staging={currentAnalysis.staging}
+                    />
+
+                    {currentAnalysis.is_valid && currentAnalysis.rnflt_analysis && (
+                      <RNFLTAnalysisCard
+                        analysis={currentAnalysis.rnflt_analysis}
+                        patientId={currentAnalysis.patient_context?.patient_id}
+                        eye={currentAnalysis.patient_context?.eye}
+                      />
+                    )}
+
+                    <ExplainabilitySection
+                      originalHeatmap={currentAnalysis.rnflt_analysis?.heatmap_image}
+                      explainability={currentAnalysis.explainability}
+                    />
+
+                    <SafetyLayerCard audit={currentAnalysis.safety_layer} />
+                  </>
+                )}
+              </>
+            ) : (
+              /* Empty Analysis State */
+              <div className="p-12 border border-slate-200 rounded-2xl text-center bg-white space-y-4 shadow-sm">
+                <Sparkles className="w-10 h-10 text-teal-600 mx-auto" />
+                <h3 className="text-base font-bold text-slate-900">No Scan Currently in Active Analysis</h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                  Select a research demo study or import a clinical OCT scan to run real-time
+                  structural classification and Grad-CAM visual explainability.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                  <button
+                    onClick={() => setActiveTab('demo-cases')}
+                    className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm transition cursor-pointer"
+                  >
+                    Select a Demo Case
+                  </button>
+                  <button
+                    onClick={() => setIsImportModalOpen(true)}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 font-medium text-xs transition flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Import OCT Scan</span>
+                  </button>
+                </div>
+              </div>
             )}
-
-            {/* AI Model Status & Flowchart */}
-            <ModelStatusSection modelStatus={modelStatus} />
-
-            {/* Explainability (Grad-CAM Preparation) */}
-            <ExplainabilitySection
-              originalHeatmap={currentAnalysis?.rnflt_analysis?.heatmap_image}
-            />
-
-            {/* Progression Forecasting (Longitudinal) */}
-            <ProgressionForecastSection />
-
-            {/* Safety & Clinical Validation Layer */}
-            <SafetyLayerCard audit={currentAnalysis?.safety_layer} />
           </div>
         )}
 
-        {/* VIEW 2: IMPORT OCT STUDY */}
-        {activeTab === 'import' && (
-          <div className="space-y-6">
-            <ImportSection
-              onAnalyze={handleAnalyze}
-              onSelectDemoCase={handleSelectDemoCase}
-              demoCases={demoCases}
-              loading={analyzing}
-            />
-          </div>
+        {/* ========================================================= */}
+        {/* 5. LONGITUDINAL PROGRESSION VIEW                          */}
+        {/* ========================================================= */}
+        {activeTab === 'progression' && (
+          <LongitudinalCharts
+            patientId={selectedPatientId || 'GM-DEMO-01'}
+            patientName={
+              patients.find((p) => p.id === (selectedPatientId || 'GM-DEMO-01'))?.name ||
+              'Aarav Menon'
+            }
+            eye={
+              patients.find((p) => p.id === (selectedPatientId || 'GM-DEMO-01'))
+                ?.eye_laterality || 'OD'
+            }
+            apiBaseUrl={apiBaseUrl}
+            scans={scans.filter((s) => s.patient_id === (selectedPatientId || 'GM-DEMO-01'))}
+          />
         )}
 
-        {/* VIEW 3: AI MODEL DETAILS */}
-        {activeTab === 'model' && (
-          <div className="space-y-6">
-            <ModelStatusSection modelStatus={modelStatus} />
-            <ExplainabilitySection
-              originalHeatmap={currentAnalysis?.rnflt_analysis?.heatmap_image}
-            />
-          </div>
-        )}
-
-        {/* VIEW 4: SAFETY & GOVERNANCE */}
-        {activeTab === 'safety' && (
-          <div className="space-y-6">
-            <SafetyLayerCard audit={currentAnalysis?.safety_layer} />
-          </div>
+        {/* ========================================================= */}
+        {/* 6. DEMO CASES LIBRARY                                     */}
+        {/* ========================================================= */}
+        {activeTab === 'demo-cases' && (
+          <DemoCasesPage
+            patients={patients}
+            onSelectPatient={(pId) => {
+              setSelectedPatientId(pId);
+              setActiveTab('patients');
+            }}
+            onSelectDemoCase={async (demoId) => {
+              await handleSelectDemoCase(demoId);
+            }}
+          />
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/60 py-4 px-6 text-center text-xs text-slate-500">
+      {/* Doctor-Facing Clinical Workstation Modals */}
+      <RegisterPatientModal
+        isOpen={isRegisterModalOpen}
+        onClose={() => setIsRegisterModalOpen(false)}
+        onSuccess={(newPatient) => {
+          refreshSystem();
+          setSelectedPatientId(newPatient.id);
+          setActiveTab('patients');
+        }}
+        apiBaseUrl={apiBaseUrl}
+      />
+
+      <ImportScanModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        patients={patients}
+        initialPatientId={importInitialPatientId}
+        onAnalyze={handleAnalyze}
+        loading={analyzing}
+      />
+
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        backendConnected={backendConnected}
+        modelStatus={modelStatus}
+        onRefresh={refreshSystem}
+      />
+
+      <AddIOPModal
+        isOpen={isIopModalOpen}
+        onClose={() => setIsIopModalOpen(false)}
+        patientId={modalTargetPatientId}
+        patientName={patients.find((p) => p.id === modalTargetPatientId)?.name || 'Patient'}
+        apiBaseUrl={apiBaseUrl}
+        onSuccess={() => {
+          setIsIopModalOpen(false);
+          refreshSystem();
+        }}
+      />
+
+      <AddVisualFieldModal
+        isOpen={isVfModalOpen}
+        onClose={() => setIsVfModalOpen(false)}
+        patientId={modalTargetPatientId}
+        apiBaseUrl={apiBaseUrl}
+        onSuccess={() => {
+          setIsVfModalOpen(false);
+          refreshSystem();
+        }}
+      />
+
+      <AddReportModal
+        isOpen={isReportModalOpen}
+        onClose={() => setIsReportModalOpen(false)}
+        patientId={modalTargetPatientId}
+        patientName={patients.find((p) => p.id === modalTargetPatientId)?.name || 'Patient'}
+        apiBaseUrl={apiBaseUrl}
+        onSuccess={() => {
+          setIsReportModalOpen(false);
+          refreshSystem();
+        }}
+      />
+
+      {/* Calm Clinical Footer */}
+      <footer className="border-t border-slate-200 bg-white/90 py-4 px-6 text-xs text-slate-500 shadow-xs">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>GlaucoMap &copy; 2026 &bull; AI-Assisted Glaucoma Progression Mapping</span>
-          <span className="text-[11px] text-slate-600">
-            Research Demonstrator &bull; 10 PM Checkpoint Prototype &bull; Not for Clinical Diagnostic Use
+          <div className="flex items-center space-x-2">
+            <span className="font-semibold text-slate-700">GlaucoMap</span>
+            <span>&bull;</span>
+            <span>Ophthalmic Structural Analysis &amp; Longitudinal Monitoring</span>
+          </div>
+          <span className="text-[11px] text-slate-500">
+            Clinical Decision-Support &amp; Research Prototype &bull; Not for Independent Diagnostic Use
           </span>
         </div>
       </footer>
