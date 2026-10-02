@@ -152,7 +152,7 @@ export const ModelResultCard: React.FC<ModelResultCardProps> = ({
             <div className="mt-4 pt-3 border-t border-slate-200 text-xs flex items-center justify-between text-slate-600">
               <span className="text-slate-500">Benchmark Reference:</span>
               <span className="font-semibold text-slate-800 font-mono">
-                {groundTruth.glaucoma_label === 1 ? 'Glaucoma Specimen' : 'Normal Control'}
+                {groundTruth.glaucoma_label === 1 ? 'Glaucoma Specimen' : 'Non-Glaucomatous'}
               </span>
             </div>
           )}

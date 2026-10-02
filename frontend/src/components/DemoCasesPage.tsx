@@ -46,7 +46,7 @@ export const DemoCasesPage: React.FC<DemoCasesPageProps> = ({
       eye: 'OS',
       datasetLabel: 'Harvard-GD RNFLT 0170',
       datasetSource: 'DEMO RNFLT — Quantitative RNFLT map, Harvard-GD held-out test split.',
-      groundTruth: 'Normal Control / Suspect (from RNFLT map)',
+      groundTruth: 'Non-Glaucomatous / Suspect (from RNFLT map)',
       scanType: 'DEMO RNFLT — Quantitative RNFLT Map (.npz 225×225)',
       iopStatus: 'Stable Readings',
       rnfltStatus: 'Robust Normal Thickness (99.2 → 98.5 µm)',

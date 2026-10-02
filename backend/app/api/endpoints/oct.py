@@ -122,7 +122,7 @@ async def get_demo_cases() -> List[Dict[str, Any]]:
         {
             "id": "harvard_gd_test_0419",
             "name": "Case GD-0419 — Real Held-Out Test Glaucoma",
-            "description": "Verified Harvard-GD held-out test sample. 225x225 RNFL thickness map with confirmed glaucoma diagnosis.",
+            "description": "Verified Harvard-GD held-out test sample. 225x225 RNFL thickness map with glaucoma-associated pattern.",
             "expected_quality": "VALID",
             "input_type": "rnflt_numeric",
             "input_type_display": "RNFLT Numerical Map (.npz)",
@@ -134,12 +134,12 @@ async def get_demo_cases() -> List[Dict[str, Any]]:
         },
         {
             "id": "harvard_gd_test_0170",
-            "name": "Case GD-0170 — Real Held-Out Test Normal Control",
+            "name": "Case GD-0170 — Real Held-Out Test Normal Sample",
             "description": "Verified Harvard-GD held-out test sample. 225x225 RNFL thickness map, normal neuroretinal rim.",
             "expected_quality": "VALID",
             "input_type": "rnflt_numeric",
             "input_type_display": "RNFLT Numerical Map (.npz)",
-            "glaucoma_ground_truth": "Normal Control (Class 0)",
+            "glaucoma_ground_truth": "Non-Glaucomatous (Class 0)",
             "progression_ground_truth": "N/A (Cross-sectional)",
             "age": 62,
             "eye": "OS",
@@ -173,7 +173,7 @@ async def get_demo_cases() -> List[Dict[str, Any]]:
         },
         {
             "id": "demo_normal_0002",
-            "name": "Case GDP-0002 — Normal Control (Harvard-GDP)",
+            "name": "Case GDP-0002 — Non-Glaucomatous Sample",
             "description": "Verified 225x225 RNFLT map, normal bilateral neuroretinal rim, non-glaucoma diagnosis.",
             "expected_quality": "VALID",
             "input_type": "rnflt_numeric",

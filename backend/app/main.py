@@ -21,7 +21,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from backend.app.api.endpoints import health, oct, model, fundus, clinical
+from backend.app.api.endpoints import health, oct, model, fundus, clinical, progression_predict
 
 # Register health check endpoint directly at /health as required
 app.include_router(health.router)
@@ -45,6 +45,8 @@ app.add_api_route("/api/scans/{scan_id}/analyze", oct.analyze_existing_scan_hand
 app.include_router(fundus.router, prefix="/api")
 app.include_router(clinical.router, prefix="/api")
 app.include_router(clinical.direct_router, prefix="/api")
+app.include_router(progression_predict.router, prefix="/api")
+app.include_router(progression_predict.router, prefix="/api/v1")
 
 import os
 from pathlib import Path

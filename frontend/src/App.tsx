@@ -18,6 +18,8 @@ import { ExplainabilitySection } from './components/ExplainabilitySection';
 import { RawOctResultCard } from './components/RawOctResultCard';
 import { SafetyLayerCard } from './components/SafetyLayerCard';
 import { StructuralAIPipelineStatus } from './components/StructuralAIPipelineStatus';
+import { ModelInfoPanel } from './components/ModelInfoPanel';
+import { AIModuleStatusCard } from './components/AIModuleStatusCard';
 import {
   OCTAnalysisResponse,
   BackendModelStatus,
@@ -26,6 +28,7 @@ import {
   ClinicalReport,
 } from './types';
 import { AlertCircle, Upload, Sparkles } from 'lucide-react';
+import { ProgressionRiskCard } from './components/ProgressionRiskCard';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('patients');
@@ -142,6 +145,9 @@ export const App: React.FC = () => {
   const handleAnalyze = async (formData: FormData) => {
     setAnalyzing(true);
     setGlobalError(null);
+    // DEMO DATA SAFETY: Clear any previous analysis before running a new one
+    // This prevents stale RNFLT / demo data from leaking between modalities
+    setCurrentAnalysis(null);
 
     try {
       let response = await fetch(`${apiBaseUrl}/api/analyze`, {
@@ -384,7 +390,11 @@ export const App: React.FC = () => {
 
                 <StructuralAIPipelineStatus diagnostics={diagnostics} />
 
-                     {/* Conditional Rendering — strict gate: raw_oct with unavailable extraction MUST NOT leak demo RNFLT */}
+                <ModelInfoPanel />
+
+                <AIModuleStatusCard modelStatus={modelStatus} diagnostics={diagnostics} />
+
+                {/* Conditional Rendering — strict gate: raw_oct with unavailable extraction MUST NOT leak demo RNFLT */}
                 {(() => {
                   const isRawOctBlocked =
                     currentAnalysis.input_type === 'raw_oct' ||
@@ -458,6 +468,12 @@ export const App: React.FC = () => {
           </div>
         )}
 
+        {/* =========================================================
+        {/* NOTE: ProgressionRiskCard is rendered only on the 'progression' tab
+             to keep it clearly separate from the structural analysis tab.
+             This enforces the rule: never combine p_glaucoma with progression risk.
+        ========================================================= */}
+
         {/* ========================================================= */}
         {/* 5. LONGITUDINAL PROGRESSION WORKSTATION                   */}
         {/* ========================================================= */}
@@ -472,17 +488,22 @@ export const App: React.FC = () => {
           />
         )}
         {activeTab === 'progression' && !selectedPatientId && (
-          <div className="p-12 border border-slate-200 rounded-2xl text-center bg-white space-y-4 shadow-sm">
-            <h3 className="text-base font-bold text-slate-900">Select a Patient to View Progression</h3>
-            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-              Please select a patient from the Patients tab to view their longitudinal progression with real IOP, Visual Field, RNFLT, and AI score trends.
-            </p>
-            <button
-              onClick={() => setActiveTab('patients')}
-              className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm transition cursor-pointer"
-            >
-              Go to Patients
-            </button>
+          <div className="space-y-6">
+            <div className="p-12 border border-slate-200 rounded-2xl text-center bg-white space-y-4 shadow-sm">
+              <h3 className="text-base font-bold text-slate-900">Select a Patient to View Progression</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                Please select a patient from the Patients tab to view their longitudinal progression with real IOP, Visual Field, RNFLT, and AI score trends.
+              </p>
+              <button
+                onClick={() => setActiveTab('patients')}
+                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm transition cursor-pointer"
+              >
+                Go to Patients
+              </button>
+            </div>
+            {/* PROGRESSION RISK MODULE — shown only here, never on the structural analysis tab.
+                Rule: p_glaucoma (Module 1) and progression probability (Module 2) are NEVER combined. */}
+            <ProgressionRiskCard apiBaseUrl={apiBaseUrl} />
           </div>
         )}
 

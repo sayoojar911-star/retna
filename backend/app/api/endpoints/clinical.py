@@ -186,7 +186,7 @@ DEMO_PATIENTS: List[Dict[str, Any]] = [
         "latest_rnflt_um": 98.5,
         "status": "Analyzed",
         "is_demo": True,
-        "demo_type": "Real Harvard-GD Normal Control (test_0419)",
+        "demo_type": "Harvard-GD RNFLT Non-Glaucomatous Sample (test_0419)",
         "demo_disclaimer": "RESEARCH DEMO — NOT A REAL PATIENT",
         "photo_avatar": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80",
     },

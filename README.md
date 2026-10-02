@@ -203,3 +203,466 @@ npm run build
 - [x] 7-point Clinical Safety & Validation checklist
 - [x] 30/30 automated unit and integration tests passing
 
+TRAIN A NEW TABULAR PROGRESSION MODEL FROM THE EXCEL DATASET
+
+IMPORTANT:
+This is a NEW model.
+Do NOT modify or retrain the existing Harvard-GD ResNet-18.
+
+Existing model:
+
+Harvard-GD AdaptedResNet18
+Input: 225×225 quantitative RNFLT map
+Task: structural glaucoma classification
+
+The new Excel dataset is a separate longitudinal clinical dataset.
+
+==================================================
+DATASET
+==================================================
+
+Workbook:
+
+[clinical_progression_dataset.xlsx
+]
+
+Sheets:
+
+Baseline
+Follow-up
+
+Baseline:
+263 records
+
+Follow-up:
+1116 records
+
+Baseline glaucoma category:
+OAG = 254
+ACG = 9
+
+There is NO normal-control class.
+
+Therefore:
+
+DO NOT train:
+"Glaucoma vs Normal"
+
+from this workbook.
+
+Instead train:
+
+"Progression Risk"
+
+Target:
+Progression Status
+
+Observed baseline distribution:
+0 = 223
+1 = 40
+
+==================================================
+TASK
+==================================================
+
+Train a supervised binary progression model.
+
+Target:
+
+Progression Status
+
+0 = no progression
+1 = progression
+
+This model predicts progression risk within this dataset.
+It is NOT a glaucoma diagnostic model.
+
+==================================================
+FEATURES
+==================================================
+
+Start with these baseline features:
+
+Age
+IOP
+CCT
+Total Visits
+
+RNFLT:
+Mean
+Superior
+Nasal
+Inferior
+Temporal
+
+Visual field:
+MD
+PLR2
+PLR3
+
+Inspect the workbook carefully to determine the exact
+column locations/names of MD, PLR2 and PLR3.
+
+The Excel workbook has multi-level/header-style columns.
+Do NOT blindly use "Unnamed:*" columns.
+
+Map the actual variables explicitly.
+
+==================================================
+DATA CLEANING
+==================================================
+
+Remove the Excel header/subheader rows.
+
+Convert numerical columns to numeric.
+
+Treat:
+
+blank
+NaN
+-1
+
+as missing where -1 is a documented missing-value sentinel.
+
+Do NOT interpret -1 as an actual visual-field measurement.
+
+Report missingness before imputation.
+
+Use training-set-derived imputation only.
+
+Do not fit preprocessing on validation/test data.
+
+==================================================
+SUBJECT-LEVEL SPLIT
+==================================================
+
+CRITICAL:
+
+Do NOT randomly split individual rows.
+
+Split by Subject Number.
+
+The same subject must never occur in:
+
+training AND validation
+
+or:
+
+training AND test
+
+or:
+
+validation AND test
+
+Also treat OD and OS from the same subject as belonging to
+the same subject-level split.
+
+Use approximately:
+
+70% subjects → train
+15% subjects → validation
+15% subjects → test
+
+Use a fixed random seed.
+
+Report:
+
+number of subjects
+number of records
+class distribution
+
+for train/validation/test.
+
+==================================================
+MODEL
+==================================================
+
+Start with XGBoost.
+
+If XGBoost is unavailable, use sklearn HistGradientBoostingClassifier.
+
+Because the positive class is smaller:
+
+0 = 223
+1 = 40
+
+handle class imbalance using class weights/sample weights.
+
+Do NOT oversample across subject boundaries.
+
+==================================================
+TRAINING
+==================================================
+
+Train using the training set only.
+
+Tune hyperparameters using validation only.
+
+Possible initial configuration:
+
+n_estimators = 300
+max_depth = 3
+learning_rate = 0.03
+subsample = 0.8
+colsample_bytree = 0.8
+
+Do not assume these are optimal.
+Use validation performance to select the final model.
+
+Save:
+
+models/checkpoints/progression_risk_model.joblib
+
+Also save:
+
+models/checkpoints/progression_preprocessor.joblib
+
+and a metadata JSON:
+
+models/checkpoints/progression_model_metadata.json
+
+Metadata must contain:
+
+feature names
+target
+class mapping
+training subject count
+validation subject count
+test subject count
+random seed
+model parameters
+dataset version/hash if available
+
+==================================================
+EVALUATION
+==================================================
+
+Evaluate ONLY once on the held-out test subjects.
+
+Report:
+
+ROC-AUC
+PR-AUC
+accuracy
+sensitivity/recall
+specificity
+precision
+F1
+confusion matrix
+
+Because the dataset is imbalanced, PR-AUC is important.
+
+Also report confidence intervals if practical.
+
+Do NOT claim this model is clinically validated.
+
+==================================================
+FEATURE IMPORTANCE
+==================================================
+
+Calculate feature importance.
+
+If possible use:
+
+SHAP
+
+to show which clinical variables contributed to model predictions.
+
+Display:
+
+RNFLT Mean
+RNFLT Superior
+RNFLT Inferior
+IOP
+VF MD
+Age
+etc.
+
+Do not interpret importance as causality.
+
+==================================================
+LONGITUDINAL FOLLOW-UP DATA
+==================================================
+
+After the baseline model works, separately analyze the Follow-up sheet.
+
+Do NOT automatically merge follow-up rows into the baseline
+training table.
+
+First determine:
+
+Subject Number
+Laterality
+Visit Number
+Interval Years
+IOP
+VF
+
+and whether these records can be linked to baseline.
+
+Create longitudinal features only after confirming the linkage.
+
+Potential future features:
+
+IOP change
+VF MD change
+visit count
+time since baseline
+VF slope
+
+Do not leak future information into a baseline prediction.
+
+==================================================
+APPLICATION INTEGRATION
+==================================================
+
+DO NOT replace the existing Harvard-GD ResNet.
+
+The application should now have two independent AI modules:
+
+MODULE 1:
+RNFLT Structural Classifier
+
+Input:
+225×225 quantitative RNFLT
+
+Output:
+p_glaucoma
+
+Model:
+Harvard-GD AdaptedResNet18
+
+MODULE 2:
+Progression Risk Model
+
+Input:
+clinical/longitudinal tabular data
+
+Output:
+progression probability
+
+Model:
+XGBoost
+
+Clearly label Module 2:
+
+"Research Progression Risk Estimate"
+
+NOT:
+
+"Glaucoma Diagnosis"
+
+==================================================
+API
+==================================================
+
+Create a separate endpoint, for example:
+
+POST /api/progression/predict
+
+Input:
+
+{
+  "age": ...,
+  "iop": ...,
+  "cct": ...,
+  "rnflt_mean": ...,
+  "rnflt_superior": ...,
+  "rnflt_nasal": ...,
+  "rnflt_inferior": ...,
+  "rnflt_temporal": ...,
+  "vf_md": ...,
+  "vf_plr2": ...,
+  "vf_plr3": ...,
+  "total_visits": ...
+}
+
+Output:
+
+{
+  "model": "progression_risk",
+  "probability": ...,
+  "classification": ...,
+  "research_only": true
+}
+
+Do not call this a clinical diagnosis.
+
+==================================================
+UI
+==================================================
+
+Add a separate card:
+
+PROGRESSION RISK
+
+Model:
+Clinical/Longitudinal XGBoost
+
+Inputs:
+RNFLT + visual field + clinical variables
+
+Output:
+Estimated progression probability
+
+Research model estimate — not a clinical diagnosis.
+
+Do NOT combine this probability with:
+
+p_glaucoma
+
+and do NOT create a fake combined score.
+
+==================================================
+TESTS
+==================================================
+
+Add tests for:
+
+1. Excel preprocessing
+2. Missing-value handling
+3. -1 sentinel handling
+4. Subject-level split
+5. No patient overlap between train/test
+6. Correct target mapping
+7. Model loading
+8. Prediction
+9. API validation
+10. Missing feature handling
+11. Existing Harvard-GD ResNet still works
+12. Raw OCT safety gate still works
+
+==================================================
+FINAL REPORT
+==================================================
+
+Report:
+
+1. Exact Excel columns used.
+2. Number of unique subjects.
+3. Number of train/validation/test subjects.
+4. Class distribution.
+5. Features used.
+6. Missing-value handling.
+7. Model used.
+8. Test ROC-AUC.
+9. Test PR-AUC.
+10. Sensitivity.
+11. Specificity.
+12. F1.
+13. Confusion matrix.
+14. Feature importance.
+15. Saved checkpoint path.
+16. API endpoint.
+17. Tests passed.
+
+IMPORTANT:
+
+Do not claim this is a raw-OCT model.
+
+Do not claim this predicts glaucoma diagnosis.
+
+Do not claim clinical validation.
+
+Do not modify the existing Harvard-GD ResNet.
+

@@ -72,6 +72,7 @@ data/demo_cases/*
 # ML Model checkpoints and weights (Do not commit large model weights)
 models/*
 !models/.gitkeep
+!models/checkpoints/ML_VERSION_MANIFEST.json
 ml/models/weights/*
 !ml/models/weights/.gitkeep
 *.pt
@@ -84,11 +85,32 @@ ml/models/weights/*
 *.safetensors
 *.ckpt
 
+# Serialised preprocessors and trained model artifacts
+*.joblib
+
+# Clinical datasets (Excel, CSV — may contain patient-identifiable data)
+*.xlsx
+*.xls
+*.csv
+!data/demo_cases/.gitkeep
+!data/raw/.gitkeep
+
+# API keys and secrets
+*.secret
+secrets/
+
 # Database & Storage
 *.sqlite
 *.sqlite3
 *.db
 pgdata/
+
+# Runtime-generated upload artifacts (scan uploads, photo uploads)
+data/uploads/
+data/reports/*.pdf
+
+# Agent config (not project source)
+.kilo/
 
 # Testing & Coverage
 .coverage

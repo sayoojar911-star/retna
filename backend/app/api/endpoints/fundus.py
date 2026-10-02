@@ -35,7 +35,7 @@ FUNDUS_DEMO_CASES: List[Dict[str, Any]] = [
     },
     {
         "id": "fundus_demo_normal",
-        "name": "Case FUNDUS-02 — Healthy Normal Control",
+        "name": "Case FUNDUS-02 — Healthy Non-Glaucomatous Sample",
         "description": "512x512 digital color fundus photograph with healthy neuroretinal rim margins and physiological cup.",
         "expected_quality": "VALID",
         "input_type": "fundus_rgb",

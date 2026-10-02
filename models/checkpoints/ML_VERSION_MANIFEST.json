@@ -1,0 +1,133 @@
+{
+  "_manifest_note": "GlaucoMap ML Version Manifest — FROZEN. Do NOT retrain or modify any model weight unless a critical bug is discovered.",
+  "manifest_version": "1.0.0",
+  "frozen_at": "2026-10-02",
+  "frozen_by": "GlaucoMap Final Phase",
+
+  "modules": {
+
+    "harvard_gd_rnflt_classifier": {
+      "status": "frozen",
+      "module_id": "MODULE_1",
+      "model_name": "Harvard-GD AdaptedResNet18",
+      "architecture": "AdaptedResNet18 (1-channel input, binary classification head)",
+      "task": "Binary structural classification — 0=Normal/Suspect, 1=Glaucoma",
+      "dataset": "Harvard-GD RNFLT dataset",
+      "checkpoint_path": "models/checkpoints/harvard_gd_rnflt_cnn_best.pt",
+      "metrics_path": "models/checkpoints/harvard_gd_rnflt_cnn_metrics.json",
+      "input": {
+        "shape": [225, 225],
+        "channels": 1,
+        "dtype": "float32",
+        "units": "micrometres (µm)",
+        "description": "Quantitative RNFLT map — NOT raw OCT pixels"
+      },
+      "preprocessing": {
+        "version": "v1",
+        "method": "Min-Max physiological normalisation to [0, 1]",
+        "resize": "none — input must be exactly 225×225"
+      },
+      "classes": {
+        "0": "Normal/Suspect",
+        "1": "Glaucoma"
+      },
+      "held_out_test_metrics": {
+        "dataset_split": "held-out test (75 samples, never used in training or validation)",
+        "train_samples": 350,
+        "val_samples": 75,
+        "test_samples": 75,
+        "best_epoch": 11,
+        "auroc": 0.7454,
+        "accuracy": 0.7467,
+        "sensitivity_recall": 0.9211,
+        "specificity": 0.5676,
+        "f1": 0.7865,
+        "pr_auc": 0.7037,
+        "tp": 35,
+        "tn": 21,
+        "fp": 16,
+        "fn": 3
+      },
+      "clinical_status": "RESEARCH MODEL — Not clinically validated. Research estimate only. Clinical correlation required.",
+      "do_not_modify": true
+    },
+
+    "progression_risk_model": {
+      "status": "frozen",
+      "module_id": "MODULE_2",
+      "model_name": "XGBoost Progression Risk Classifier",
+      "architecture": "XGBClassifier (binary:logistic)",
+      "task": "Progression-risk estimation from tabular clinical data",
+      "dataset": "Clinical longitudinal Excel dataset (clinical_progression_dataset.xlsx)",
+      "checkpoint_path": "models/checkpoints/progression_risk_model.joblib",
+      "preprocessor_path": "models/checkpoints/progression_preprocessor.joblib",
+      "metadata_path": "models/checkpoints/progression_model_metadata.json",
+      "model_card_path": "models/checkpoints/progression_model_card.md",
+      "input_features": [
+        "age",
+        "iop",
+        "cct",
+        "total_visits",
+        "rnflt_mean",
+        "rnflt_S",
+        "rnflt_N",
+        "rnflt_I",
+        "rnflt_T",
+        "vf_md_proxy",
+        "vf_std"
+      ],
+      "preprocessing": {
+        "version": "v1",
+        "missing_handling": "median imputer fit on train only; -1 and blank treated as NaN",
+        "note": "vf_md_proxy is a proxy derived from VF threshold columns (cols 20–80 of Excel), NOT clinical VF MD"
+      },
+      "target": "Progression Status (col 8 PLR2, 0=no progression, 1=progression)",
+      "validation_selected_threshold": 0.30,
+      "held_out_test_metrics_at_threshold_0_30": {
+        "note": "IMPORTANT: Only 7 positive (progressors) in held-out test set",
+        "test_subjects": 23,
+        "test_records": 44,
+        "positive_cases_in_test": 7,
+        "sensitivity": 0.57,
+        "specificity": 0.91,
+        "sensitivity_95ci": [0.16, 0.75],
+        "roc_auc": 0.6007,
+        "train_subjects": 100,
+        "val_subjects": 21
+      },
+      "clinical_status": "RESEARCH ONLY — Not clinically validated. Only 7 positive test cases. Wide confidence intervals. No external validation. No normal controls in the progression dataset. VF MD proxy is NOT equivalent to clinical VF MD. Current model uses baseline information only.",
+      "do_not_modify": true
+    },
+
+    "oct_rnflt_segmentation": {
+      "status": "unavailable",
+      "module_id": "MODULE_3",
+      "model_name": "OCT→RNFLT Segmentation (SAM2-based MGU)",
+      "architecture": "SAM2 + MGU (Medical Glaucoma U-Net)",
+      "task": "Segment raw OCT B-scan → extract quantitative RNFLT map",
+      "checkpoint_path": "models/sam2_oct/final_runs_Glaucoma_last.pt",
+      "checkpoint_available": false,
+      "blocker": "models/sam2_oct/final_runs_Glaucoma_last.pt is unavailable in current build",
+      "consequence": "Raw OCT end-to-end analysis is BLOCKED. Raw OCT uploads MUST NOT produce a structural classification.",
+      "do_not_modify": true
+    },
+
+    "raw_oct_end_to_end_pipeline": {
+      "status": "unavailable",
+      "module_id": "MODULE_3_PIPELINE",
+      "description": "Raw OCT → OCT Quality → OCT→RNFLT Segmentation → Quantitative RNFLT → Harvard-GD CNN → Structural Estimate",
+      "blocked_by": "oct_rnflt_segmentation checkpoint unavailable",
+      "current_behaviour": "OCT imported ✓  |  Image quality checked ✓  |  RNFLT extraction unavailable ⚠  |  Structural AI classification: NOT PERFORMED",
+      "do_not_modify": true
+    }
+  },
+
+  "independent_module_note": "The RNFLT Classifier (Module 1) and the Progression Risk Model (Module 2) are INDEPENDENT. Their outputs MUST NOT be combined. p_glaucoma is produced exclusively by Module 1. Progression probability is produced exclusively by Module 2.",
+
+  "demo_data_safety": {
+    "raw_oct_tag": "RAW_OCT",
+    "uploaded_rnflt_tag": "UPLOADED_RNFLT",
+    "demo_rnflt_tag": "DEMO_RNFLT",
+    "rule": "Demo RNFLT data MUST NEVER appear after a raw OCT upload. State must be fully cleared on modality switch."
+  }
+}
