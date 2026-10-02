@@ -23,13 +23,16 @@ import os
 import shutil
 import math
 
-from ml.forecasting.progression_forecaster import StubProgressionForecaster
+from ml.forecasting.progression_forecaster import LongitudinalProgressionForecaster
+from ml.models.staging_interface import HeuristicGlaucomaStagingModel
+from ml.models.risk_engine import evaluate_risk_alerts
 from backend.app.services.pdf_generator import generate_clinical_report_pdf
 
 router = APIRouter(prefix="/clinical", tags=["Clinical Workstation"])
 direct_router = APIRouter(tags=["Clinical Workstation Direct"])
 
-forecaster = StubProgressionForecaster()
+forecaster = LongitudinalProgressionForecaster()
+staging_model = HeuristicGlaucomaStagingModel()
 
 REPORTS_DIR = Path("data/reports")
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -79,6 +82,35 @@ class ReportCreateRequest(BaseModel):
 class GenerateReportRequest(BaseModel):
     report_type: str = "Full Ophthalmic Structural & Longitudinal Report"
     scan_id: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class VisitCreateRequest(BaseModel):
+    visit_date: str
+    eye: str = "OD"
+    oct_reference: Optional[str] = None
+    scan_id: Optional[str] = None
+    qc_status: Optional[str] = None
+    qc_message: Optional[str] = None
+    rnfl_available: bool = False
+    mean_rnflt_um: Optional[float] = None
+    median_rnflt_um: Optional[float] = None
+    min_rnflt_um: Optional[float] = None
+    max_rnflt_um: Optional[float] = None
+    phys_mean_rnflt_um: Optional[float] = None
+    iop_mmhg: Optional[float] = None
+    iop_method: Optional[str] = None
+    vf_md_db: Optional[float] = None
+    vf_psd_db: Optional[float] = None
+    vf_vfi_pct: Optional[float] = None
+    vf_reliability: Optional[str] = None
+    model_name: Optional[str] = None
+    model_version: Optional[str] = None
+    predicted_class: Optional[int] = None
+    predicted_category: Optional[str] = None
+    classification_score: Optional[float] = None
+    gradcam_available: bool = False
+    analysis_timestamp: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -872,6 +904,75 @@ async def add_vf_record_handler(patient_id: str, payload: VisualFieldCreateReque
     return {"status": "SUCCESS", "success": True, "record": record, "measurement": record}
 
 
+visits_repo: List[Dict[str, Any]] = []
+
+
+def _visit_from_payload(patient_id: str, payload: VisitCreateRequest, visit_id: Optional[str] = None) -> Dict[str, Any]:
+    vid = visit_id or f"visit-{uuid.uuid4().hex[:8]}"
+    ts = payload.analysis_timestamp or datetime.now().strftime("%Y-%m-%d")
+    return {
+        "visit_id": vid,
+        "id": vid,
+        "patient_id": patient_id,
+        "visit_date": payload.visit_date,
+        "date": payload.visit_date,
+        "eye": payload.eye,
+        "oct_reference": payload.oct_reference,
+        "scan_id": payload.scan_id,
+        "qc_status": payload.qc_status,
+        "qc_message": payload.qc_message,
+        "rnfl_available": bool(payload.rnfl_available),
+        "mean_rnflt_um": payload.mean_rnflt_um,
+        "median_rnflt_um": payload.median_rnflt_um,
+        "min_rnflt_um": payload.min_rnflt_um,
+        "max_rnflt_um": payload.max_rnflt_um,
+        "phys_mean_rnflt_um": payload.phys_mean_rnflt_um,
+        "iop_mmhg": payload.iop_mmhg,
+        "iop_method": payload.iop_method,
+        "vf_md_db": payload.vf_md_db,
+        "vf_psd_db": payload.vf_psd_db,
+        "vf_vfi_pct": payload.vf_vfi_pct,
+        "vf_reliability": payload.vf_reliability,
+        "model_name": payload.model_name,
+        "model_version": payload.model_version,
+        "predicted_class": payload.predicted_class,
+        "predicted_category": payload.predicted_category,
+        "classification_score": payload.classification_score,
+        "gradcam_available": bool(payload.gradcam_available),
+        "analysis_timestamp": ts,
+        "notes": payload.notes or "",
+    }
+
+
+async def create_visit_handler(patient_id: str, payload: VisitCreateRequest) -> Dict[str, Any]:
+    patient = next((p for p in patients_repo if p["id"] == patient_id), None)
+    if not patient:
+        raise HTTPException(status_code=404, detail=f"Patient '{patient_id}' not found.")
+    if not payload.visit_date or not payload.eye:
+        raise HTTPException(status_code=422, detail="visit_date and eye are required.")
+    rec = _visit_from_payload(patient_id, payload)
+    visits_repo.append(rec)
+    return {"status": "SUCCESS", "visit": rec}
+
+
+async def get_visits_handler(patient_id: str, eye: Optional[str] = None) -> List[Dict[str, Any]]:
+    patient = next((p for p in patients_repo if p["id"] == patient_id), None)
+    if not patient:
+        raise HTTPException(status_code=404, detail=f"Patient '{patient_id}' not found.")
+    out = [v for v in visits_repo if v["patient_id"] == patient_id]
+    if eye:
+        out = [v for v in out if v["eye"] == eye]
+    out.sort(key=lambda x: x["visit_date"])
+    return out
+
+
+async def get_visit_handler(patient_id: str, visit_id: str) -> Dict[str, Any]:
+    v = next((x for x in visits_repo if x["visit_id"] == visit_id and x["patient_id"] == patient_id), None)
+    if not v:
+        raise HTTPException(status_code=404, detail=f"Visit '{visit_id}' not found for patient '{patient_id}'.")
+    return v
+
+
 async def add_clinical_report_handler(patient_id: str, payload: ReportCreateRequest) -> Dict[str, Any]:
     patient = next((p for p in patients_repo if p["id"] == patient_id), None)
     if not patient:
@@ -1187,6 +1288,29 @@ async def get_patient_progression_handler(patient_id: str) -> Dict[str, Any]:
         diff_vf = round(vf_pts[-1][1] - vf_pts[0][1], 1)
         vf_change = f"{diff_vf:+.1f} dB ({vf_pts[0][1]} to {vf_pts[-1][1]} dB)"
 
+    _p_rnflt = [{"date": p[0], "mean_rnflt_um": p[1]} for p in rnflt_pts]
+    _p_iop = [{"date": p[0], "iop_mmhg": p[1]} for p in iop_pts]
+    _p_vf = [{"date": p[0], "md_db": p[1]} for p in vf_pts]
+    _fc = forecaster.forecast(patient_id=patient_id, rnflt_history=_p_rnflt, iop_history=_p_iop, vf_history=_p_vf, horizons_months=[6, 12, 18, 24])
+    _forecast_block = {
+        "available": _fc.available,
+        "status": _fc.status,
+        "message": _fc.message,
+        "horizons": _fc.horizons,
+        "trajectory": [{"horizon_months": t.horizon_months, "estimated_rnflt_um": t.estimated_rnflt_um, "lower_bound_um": t.lower_bound_um, "upper_bound_um": t.upper_bound_um, "confidence_level": t.confidence_level} for t in _fc.trajectory],
+        "uncertainty_method": _fc.uncertainty_method,
+        "model_name": _fc.model_name,
+        "clinical_notice": _fc.clinical_notice,
+    }
+    _last_rnflt = rnflt_pts[-1][1] if rnflt_pts else None
+    _last_md = vf_pts[-1][1] if vf_pts else None
+    import numpy as _np
+    _stage_arr = _np.array([[_last_rnflt or 85.0]]) if _last_rnflt is not None else None
+    _stage_res = staging_model.evaluate_stage(_stage_arr if _stage_arr is not None else 85.0, vf_md=_last_md)
+    _stage_block = {"available": _stage_res.available, "status": _stage_res.status, "message": _stage_res.message, "stage_label": _stage_res.stage_label, "stage_code": _stage_res.stage_code, "confidence": _stage_res.confidence, "staging_system": _stage_res.staging_system}
+    _alerts = evaluate_risk_alerts(iop_history=_p_iop, rnflt_history=_p_rnflt, vf_history=_p_vf, staging_label=_stage_res.stage_label)
+    _risk_alerts_block = [{"level": a.level, "title": a.title, "detail": a.detail, "triggered_by": a.triggered_by, "value": a.value, "threshold": a.threshold} for a in _alerts]
+
     return {
         "patient_id": patient_id,
         "scans_count": len(p_scans),
@@ -1229,24 +1353,12 @@ async def get_patient_progression_handler(patient_id: str) -> Dict[str, Any]:
                 else "Visual-field history unavailable or insufficient."
             ),
         },
-        "forecast": {
-            "status": "UNAVAILABLE",
-            "message": (
-                "24-month forecast unavailable. Additional longitudinal data and a validated progression "
-                "model are required."
-            ),
-            "horizons": [6, 12, 18, 24],
-        },
-        "stage": {
-            "status": "STAGE_UNAVAILABLE",
-            "message": (
-                "Stage assessment unavailable. The current structural model provides binary classification only. "
-                "A separately trained and validated staging model is required."
-            ),
-        },
+        "forecast": _forecast_block,
+        "stage": _stage_block,
+        "risk_alerts": _risk_alerts_block,
         "clinical_notice": (
-            "Progression rates are mathematical rate-of-change estimates based on available historical "
-            "records. They do not constitute an autonomous clinical prognosis."
+            "Progression rates and forecasts are research estimates based on available historical "
+            "records. They do not constitute an autonomous clinical prognosis. Clinical correlation required."
         ),
     }
 
@@ -1346,6 +1458,9 @@ router.add_api_route("/patients/{patient_id}/reports", get_patient_reports_handl
 router.add_api_route("/patients/{patient_id}/reports", add_clinical_report_handler, methods=["POST"])
 router.add_api_route("/patients/{patient_id}/report/generate", generate_patient_report_handler, methods=["POST"])
 router.add_api_route("/patients/{patient_id}/scans", add_scan_record_handler, methods=["POST"])
+router.add_api_route("/patients/{patient_id}/visits", create_visit_handler, methods=["POST"])
+router.add_api_route("/patients/{patient_id}/visits", get_visits_handler, methods=["GET"])
+router.add_api_route("/patients/{patient_id}/visits/{visit_id}", get_visit_handler, methods=["GET"])
 router.add_api_route("/patients/{patient_id}/progression", get_patient_progression_handler, methods=["GET"])
 router.add_api_route("/patients/{patient_id}/comparison", get_clinical_comparison_handler, methods=["GET"])
 router.add_api_route("/scans", get_all_scans_handler, methods=["GET"])
@@ -1374,6 +1489,9 @@ direct_router.add_api_route("/patients/{patient_id}/reports", get_patient_report
 direct_router.add_api_route("/patients/{patient_id}/reports", add_clinical_report_handler, methods=["POST"])
 direct_router.add_api_route("/patients/{patient_id}/report/generate", generate_patient_report_handler, methods=["POST"])
 direct_router.add_api_route("/patients/{patient_id}/scans", add_scan_record_handler, methods=["POST"])
+direct_router.add_api_route("/patients/{patient_id}/visits", create_visit_handler, methods=["POST"])
+direct_router.add_api_route("/patients/{patient_id}/visits", get_visits_handler, methods=["GET"])
+direct_router.add_api_route("/patients/{patient_id}/visits/{visit_id}", get_visit_handler, methods=["GET"])
 direct_router.add_api_route("/patients/{patient_id}/progression", get_patient_progression_handler, methods=["GET"])
 direct_router.add_api_route("/patients/{patient_id}/comparison", get_clinical_comparison_handler, methods=["GET"])
 direct_router.add_api_route("/scans", get_all_scans_handler, methods=["GET"])

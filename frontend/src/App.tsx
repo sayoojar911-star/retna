@@ -11,13 +11,13 @@ import { SettingsModal } from './components/SettingsModal';
 import { AddIOPModal } from './components/AddIOPModal';
 import { AddVisualFieldModal } from './components/AddVisualFieldModal';
 import { AddReportModal } from './components/AddReportModal';
-import { LongitudinalCharts } from './components/LongitudinalCharts';
 import { QualityControlCard } from './components/QualityControlCard';
 import { ModelResultCard } from './components/ModelResultCard';
 import { RNFLTAnalysisCard } from './components/RNFLTAnalysisCard';
 import { ExplainabilitySection } from './components/ExplainabilitySection';
 import { RawOctResultCard } from './components/RawOctResultCard';
 import { SafetyLayerCard } from './components/SafetyLayerCard';
+import { StructuralAIPipelineStatus } from './components/StructuralAIPipelineStatus';
 import {
   OCTAnalysisResponse,
   BackendModelStatus,
@@ -55,6 +55,8 @@ export const App: React.FC = () => {
   const [modalTargetPatientId, setModalTargetPatientId] = useState<string>('GM-DEMO-01');
 
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+  const [diagnostics, setDiagnostics] = useState<{ two_stage_architecture?: { sam2_base: string; mgu: string; rnflt_resnet: string; end_to_end_raw_oct: string } } | null>(null);
 
   // 1. Fetch Clinical Data and System Status
   const refreshSystem = useCallback(async () => {
@@ -116,6 +118,11 @@ export const App: React.FC = () => {
       } catch (e) {
         console.warn('Model status fetch notice:', e);
       }
+      // Fetch diagnostics for pipeline status (SAM2/MGU/ResNet)
+      try {
+        const dRes = await fetch(`${apiBaseUrl}/api/model/diagnostics`).catch(() => fetch(`${apiBaseUrl}/api/v1/model/diagnostics`));
+        if (dRes.ok) setDiagnostics(await dRes.json() as typeof diagnostics);
+      } catch {}
     } catch (err: unknown) {
       setBackendConnected(false);
       if (err instanceof Error) {
@@ -321,12 +328,17 @@ export const App: React.FC = () => {
                 {/* Clinical Context Bar */}
                 <div className="bg-white border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-sm">
                   <div className="flex flex-wrap items-center gap-2">
+                    {(() => {
+                      const srcBadge = currentAnalysis.input_type === 'raw_oct' ? 'RAW OCT' : (currentAnalysis.input_type === 'rnflt_numeric' || currentAnalysis.rnflt_analysis) && (currentAnalysis as unknown as { input_source?:string}).input_source === 'demo_rnflt' ? 'DEMO RNFLT' : currentAnalysis.rnflt_analysis ? 'RNFLT structural classifier' : 'Awaiting study';
+                      const srcTone = srcBadge === 'RAW OCT' ? 'bg-amber-100 text-amber-800 border-amber-200' : srcBadge === 'DEMO RNFLT' ? 'bg-teal-100 text-teal-800 border-teal-200' : 'bg-slate-100 text-slate-700 border-slate-200';
+                      return <span className={`text-[10px] font-bold tracking-wider px-2.5 py-1 rounded-full border ${srcTone}`}>Input type: {srcBadge}</span>;
+                    })()}
                     <span className="text-slate-500 font-medium">Modality:</span>
                     <span className="font-semibold text-slate-900 font-mono bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200">
                       {currentAnalysis.input_type_display ||
                         (currentAnalysis.input_type === 'raw_oct'
                           ? 'Raw / Digital OCT Study'
-                          : 'RNFLT Numerical Map')}
+                          : currentAnalysis.input_type === 'rnflt_numeric' ? 'Harvard-GD RNFLT classifier — Quantitative 225×225 RNFLT map' : 'RNFLT structural classifier — 225×225 RNFLT map')}
                     </span>
                     <span className="text-slate-500 font-medium ml-2">Patient ID:</span>
                     <span className="font-semibold text-teal-800 font-mono bg-teal-50 px-2.5 py-0.5 rounded-lg border border-teal-200">
@@ -358,41 +370,64 @@ export const App: React.FC = () => {
                   issues={currentAnalysis.issues}
                 />
 
-                {/* Conditional Rendering Based on Modality */}
-                {currentAnalysis.input_type === 'raw_oct' ? (
-                  /* PATH B: Raw OCT Cross-Section */
-                  <RawOctResultCard
-                    rawStudy={currentAnalysis.raw_oct_study}
-                    aiAnalysis={currentAnalysis.ai_analysis}
-                    patientContext={currentAnalysis.patient_context}
-                    filename={currentAnalysis.filename}
-                  />
-                ) : (
-                  /* PATH A: RNFLT Numerical Map */
-                  <>
-                    <ModelResultCard
-                      modelResult={currentAnalysis.model_result}
-                      patientContext={currentAnalysis.patient_context}
-                      groundTruth={currentAnalysis.research_ground_truth}
-                      staging={currentAnalysis.staging}
-                    />
-
-                    {currentAnalysis.is_valid && currentAnalysis.rnflt_analysis && (
-                      <RNFLTAnalysisCard
-                        analysis={currentAnalysis.rnflt_analysis}
-                        patientId={currentAnalysis.patient_context?.patient_id}
-                        eye={currentAnalysis.patient_context?.eye}
-                      />
-                    )}
-
-                    <ExplainabilitySection
-                      originalHeatmap={currentAnalysis.rnflt_analysis?.heatmap_image}
-                      explainability={currentAnalysis.explainability}
-                    />
-
-                    <SafetyLayerCard audit={currentAnalysis.safety_layer} />
-                  </>
+                {/* Generate Report Button (RNFLT Path Only) */}
+                {currentAnalysis.input_type !== 'raw_oct' && currentAnalysis.is_valid && (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <button
+                      onClick={() => setActiveTab('reports')}
+                      className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm transition cursor-pointer"
+                    >
+                      Generate Report
+                    </button>
+                  </div>
                 )}
+
+                <StructuralAIPipelineStatus diagnostics={diagnostics} />
+
+                     {/* Conditional Rendering — strict gate: raw_oct with unavailable extraction MUST NOT leak demo RNFLT */}
+                {(() => {
+                  const isRawOctBlocked =
+                    currentAnalysis.input_type === 'raw_oct' ||
+                    currentAnalysis.ai_analysis?.rnflt_extraction?.available === false ||
+                    currentAnalysis.model_result === null && !currentAnalysis.rnflt_analysis;
+                  if (isRawOctBlocked && (currentAnalysis.input_type === 'raw_oct' || !currentAnalysis.rnflt_analysis)) {
+                    return (
+                      <RawOctResultCard
+                        rawStudy={currentAnalysis.raw_oct_study}
+                        aiAnalysis={currentAnalysis.ai_analysis}
+                        patientContext={currentAnalysis.patient_context}
+                        filename={currentAnalysis.filename}
+                      />
+                    );
+                  }
+                  return (
+                    <>
+                      <ModelResultCard
+                        modelResult={currentAnalysis.model_result}
+                        patientContext={currentAnalysis.patient_context}
+                        groundTruth={currentAnalysis.research_ground_truth}
+                        staging={currentAnalysis.staging}
+                      />
+
+                      {currentAnalysis.is_valid && currentAnalysis.rnflt_analysis && currentAnalysis.model_result && (
+                        <RNFLTAnalysisCard
+                          analysis={currentAnalysis.rnflt_analysis}
+                          patientId={currentAnalysis.patient_context?.patient_id}
+                          eye={currentAnalysis.patient_context?.eye}
+                        />
+                      )}
+
+                      {currentAnalysis.rnflt_analysis && (
+                        <ExplainabilitySection
+                          originalHeatmap={currentAnalysis.rnflt_analysis?.heatmap_image}
+                          explainability={currentAnalysis.explainability}
+                        />
+                      )}
+
+                      {currentAnalysis.safety_layer && <SafetyLayerCard audit={currentAnalysis.safety_layer} />}
+                    </>
+                  );
+                })()}
               </>
             ) : (
               /* Empty Analysis State */
@@ -424,22 +459,31 @@ export const App: React.FC = () => {
         )}
 
         {/* ========================================================= */}
-        {/* 5. LONGITUDINAL PROGRESSION VIEW                          */}
+        {/* 5. LONGITUDINAL PROGRESSION WORKSTATION                   */}
         {/* ========================================================= */}
-        {activeTab === 'progression' && (
-          <LongitudinalCharts
-            patientId={selectedPatientId || 'GM-DEMO-01'}
-            patientName={
-              patients.find((p) => p.id === (selectedPatientId || 'GM-DEMO-01'))?.name ||
-              'Aarav Menon'
-            }
-            eye={
-              patients.find((p) => p.id === (selectedPatientId || 'GM-DEMO-01'))
-                ?.eye_laterality || 'OD'
-            }
+        {activeTab === 'progression' && selectedPatientId && (
+          <PatientProfile
+            patientId={selectedPatientId}
+            onBack={() => setSelectedPatientId(null)}
+            onSelectScanForAnalysis={handleSelectScanForAnalysis}
+            onOpenImportModalForPatient={handleOpenImportModalForPatient}
             apiBaseUrl={apiBaseUrl}
-            scans={scans.filter((s) => s.patient_id === (selectedPatientId || 'GM-DEMO-01'))}
+            activeAnalysis={currentAnalysis}
           />
+        )}
+        {activeTab === 'progression' && !selectedPatientId && (
+          <div className="p-12 border border-slate-200 rounded-2xl text-center bg-white space-y-4 shadow-sm">
+            <h3 className="text-base font-bold text-slate-900">Select a Patient to View Progression</h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              Please select a patient from the Patients tab to view their longitudinal progression with real IOP, Visual Field, RNFLT, and AI score trends.
+            </p>
+            <button
+              onClick={() => setActiveTab('patients')}
+              className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-sm transition cursor-pointer"
+            >
+              Go to Patients
+            </button>
+          </div>
         )}
 
         {/* ========================================================= */}

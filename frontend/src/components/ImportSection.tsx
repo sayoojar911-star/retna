@@ -67,8 +67,8 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
               SELECT INPUT TYPE
             </h3>
             <p className="text-sm font-semibold text-white mt-0.5">
-              Choose the OCT acquisition data format to route through the validation pipeline
-            </p>
+                Upload an OCT scan image to analyze
+              </p>
           </div>
           <span className="text-[11px] font-mono px-2.5 py-1 rounded bg-teal-500/10 text-teal-300 border border-teal-500/20 w-fit">
             Modality Gate: {inputType === 'rnflt_numeric' ? 'RNFLT CNN Pipeline' : 'QA Validation Only'}
@@ -253,12 +253,12 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
       <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-6 shadow-sm space-y-5">
         <div className="border-b border-slate-800 pb-3">
           <h3 className="text-sm font-semibold text-white">
-            Import OCT Study
+            Import OCT Scan
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
             {inputType === 'rnflt_numeric'
               ? 'Import quantitative 225×225 peripapillary RNFL thickness map (.npz or .npy)'
-              : 'Import digital / raw OCT scan image (.png, .jpg, .jpeg, .tif, .tiff, .bmp, .dcm)'}
+              : 'Import OCT scan image (.png, .jpg, .jpeg, .tif, .tiff, .bmp, .dcm)'}
           </p>
         </div>
 
@@ -317,7 +317,7 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
               ) : (
                 <div>
                   <div className="text-xs font-medium text-slate-300">
-                    Click to select or drag &amp; drop {inputType === 'rnflt_numeric' ? 'RNFLT numerical map' : 'raw OCT study image'}
+                    Click to select or drag &amp; drop {inputType === 'rnflt_numeric' ? 'RNFLT numerical map' : 'OCT scan image'}
                   </div>
                   <div className="text-[11px] text-slate-500 mt-1 font-mono">
                     {inputType === 'rnflt_numeric'
@@ -427,13 +427,13 @@ export const ImportSection: React.FC<ImportSectionProps> = ({
               {loading ? (
                 <>
                   <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                  <span>Processing OCT Study...</span>
+                    <span>Processing OCT Scan...</span>
                 </>
               ) : (
                 <>
                   <FileText className="w-3.5 h-3.5" />
                   <span>
-                    {inputType === 'rnflt_numeric' ? 'Import OCT Study & Analyze' : 'Import OCT Study'}
+                    {inputType === 'rnflt_numeric' ? 'Upload OCT Scan & Analyze' : 'Upload OCT Scan'}
                   </span>
                 </>
               )}

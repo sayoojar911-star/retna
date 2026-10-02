@@ -41,7 +41,7 @@ export const AddIOPModal: React.FC<AddIOPModalProps> = ({
     setError(null);
 
     try {
-      const res = await fetch(`${apiBaseUrl}/api/clinical/patients/${patientId}/iop`, {
+      const res = await fetch(`${apiBaseUrl}/api/patients/${patientId}/iop`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

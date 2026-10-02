@@ -80,3 +80,48 @@ class StubGlaucomaStagingModel(BaseGlaucomaStagingModel):
             staging_system="Hodapp-Parrish-Anderson / Mills (Pending Model)",
             requires_clinical_correlation=True,
         )
+
+
+class HeuristicGlaucomaStagingModel(BaseGlaucomaStagingModel):
+    """Research staging heuristic mapping RNFLT + VF MD to Hodapp-Parrish-Anderson tiers.
+
+    Early: MD > -6 and RNFLT > 80; Moderate: MD -6 to -12 or RNFLT 65-80; Advanced otherwise.
+    Clearly labelled as a research estimate, not a validated diagnosis.
+    """
+
+    @property
+    def model_name(self) -> str:
+        return "HeuristicGlaucomaStagingModel (RNFLT+VF Research Estimate)"
+
+    @property
+    def is_validated(self) -> bool:
+        return False
+
+    def evaluate_stage(self, rnflt_map: Any, vf_md: Optional[float] = None) -> StagingResult:
+        try:
+            rnflt_mean = None
+            if rnflt_map is not None:
+                import numpy as np
+                arr = rnflt_map
+                if hasattr(arr, "shape"):
+                    m = np.asarray(arr, dtype=np.float64)
+                    rnflt_mean = float(np.nanmean(m[np.isfinite(m)])) if m.size else None
+                elif isinstance(arr, (int, float)):
+                    rnflt_mean = float(arr)
+            md = float(vf_md) if vf_md is not None else None
+            if rnflt_mean is None and md is None:
+                return StagingResult(available=False, status="STAGE_UNAVAILABLE", message="Stage assessment unavailable. Insufficient RNFLT and VF data for staging estimate.", stage_label=None, stage_code=None, confidence=None, staging_system="Heuristic (RNFLT+MD)", requires_clinical_correlation=True)
+            if md is not None and md <= -12:
+                label, code = "Advanced", 2
+            elif md is not None and md <= -6:
+                label, code = "Moderate", 1
+            elif rnflt_mean is not None and rnflt_mean <= 65:
+                label, code = "Advanced", 2
+            elif rnflt_mean is not None and rnflt_mean <= 80:
+                label, code = "Moderate", 1
+            else:
+                label, code = "Early", 0
+            conf = 0.62 if (rnflt_mean is not None and md is not None) else 0.48
+            return StagingResult(available=True, status="RESEARCH_ESTIMATE", message=f"Research staging estimate: {label}. Based on RNFLT {rnflt_mean:.1f}um and VF MD {md}dB where available. Clinical correlation required.", stage_label=label, stage_code=code, confidence=conf, staging_system="Heuristic: Hodapp-Parrish-Anderson tiers (RNFLT+VF MD)", requires_clinical_correlation=True)
+        except Exception as e:
+            return StagingResult(available=False, status="STAGE_UNAVAILABLE", message=f"Stage assessment unavailable: {e}", stage_label=None, stage_code=None, confidence=None, staging_system="Heuristic (RNFLT+MD)", requires_clinical_correlation=True)

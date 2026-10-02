@@ -3,7 +3,7 @@ import { Activity, ShieldCheck, Layers } from 'lucide-react';
 import { ModelResult, PatientContext, GlaucomaStagingInfo } from '../types';
 
 interface ModelResultCardProps {
-  modelResult?: ModelResult;
+  modelResult?: ModelResult | null;
   patientContext?: PatientContext;
   groundTruth?: {
     glaucoma_label: number | null;
@@ -20,13 +20,20 @@ export const ModelResultCard: React.FC<ModelResultCardProps> = ({
   staging,
 }) => {
   if (!modelResult) {
-    return null;
+    return (
+      <div className="bg-white border border-amber-200 rounded-2xl p-6 shadow-sm space-y-2">
+        <div className="text-xs font-bold text-amber-900">OCT imported successfully — OCT quality analysis completed</div>
+        <p className="text-xs text-amber-800 leading-relaxed">Quantitative RNFLT extraction unavailable — MGU checkpoint missing (<code className="font-mono">models/sam2_oct/final_runs_Glaucoma_last.pt</code> unavailable). Structural AI classification was not performed — not Normal, not 0%/100%. Raw OCT path is BLOCKED until RNFLT extraction is available.</p>
+        <p className="text-[11px] font-mono text-slate-600">SAM2 base: PASS 308.6MB · MGU OCT segmentation: UNAVAILABLE · ResNet RNFLT: PASS · End-to-end raw OCT: BLOCKED</p>
+      </div>
+    );
   }
 
   const isGlaucoma = modelResult.predicted_class === 1;
   const score = modelResult.model_estimated_classification_score ?? 0;
   const scorePct =
     modelResult.model_estimated_classification_score_pct || `${(score * 100).toFixed(1)}%`;
+  const dbg = (modelResult as unknown as { debug?: { raw_output: { logits: number[]; probabilities: { p_glaucoma: number; p_normal: number }; predicted_class_index: number; class_mapping: Record<string,string>; final_probability_for_score: number }; tensor_shape_sent_to_model: number[]; tensor_stats: { min:number; max:number; mean:number }; original_image_dims?: number[]; input_type_detected?: string } }).debug;
 
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-5">
@@ -46,8 +53,9 @@ export const ModelResultCard: React.FC<ModelResultCardProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Machine learning quantitative pattern evaluation on standardized peripapillary RNFL thickness
+              RNFLT structural classifier — Harvard-GD RNFLT classifier (quantitative RNFLT map, not raw OCT)
             </p>
+            <p className="text-[11px] text-slate-500 mt-1">DEMO / RESEARCH INPUT — This is a quantitative RNFLT map (225×225 µm). It is NOT a raw OCT B-scan. · Research model estimate — not a clinical diagnosis.</p>
           </div>
         </div>
 
@@ -93,15 +101,18 @@ export const ModelResultCard: React.FC<ModelResultCardProps> = ({
 
             <p className="text-xs text-slate-700 leading-relaxed">
               {isGlaucoma
-                ? 'Axonal bundle attenuation detected along superior/inferior peripapillary sectors. Quantitative profile correlates with glaucomatous structural thinning.'
-                : 'Intact neuroretinal rim thickness with preserved superior and inferior physiological double-hump contour.'}
+                ? 'Axonal bundle attenuation detected along superior/inferior peripapillary sectors. Quantitative RNFLT profile correlates with glaucomatous structural thinning (RNFLT structural classifier).'
+                : 'Intact neuroretinal rim thickness with preserved superior and inferior physiological double-hump contour (RNFLT structural classifier).'}
             </p>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center space-x-2 text-[11px] text-slate-600">
-            <ShieldCheck className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-            <span>AI model estimate &bull; Clinical correlation required.</span>
-          </div>
+            <div className="mt-4 pt-3 border-t border-slate-200/60 flex flex-col space-y-1 text-[11px] text-slate-600">
+              <div className="flex items-center space-x-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                <span>AI Model Estimate — Research model estimate — not a clinical diagnosis. RNFLT classifier, not raw-OCT end-to-end.</span>
+              </div>
+              <span className="pl-5">Clinical correlation required.</span>
+            </div>
         </div>
 
         {/* Confidence & Score Card */}
@@ -115,7 +126,7 @@ export const ModelResultCard: React.FC<ModelResultCardProps> = ({
               <span className="text-3xl font-extrabold text-slate-900 font-mono tracking-tight">
                 {scorePct}
               </span>
-              <span className="text-xs text-slate-500">calibrated output</span>
+              <span className="text-xs text-slate-500">p= {(score).toFixed(4)}</span>
             </div>
 
             {/* Visual Score Bar */}
@@ -148,7 +159,21 @@ export const ModelResultCard: React.FC<ModelResultCardProps> = ({
         </div>
       </div>
 
-      {/* 3. Glaucoma Staging Section (Honest Clinical Disclaimer) */}
+          {/* 2b. Model Information (compact) */}
+          <div className="p-3.5 rounded-xl border border-slate-200 bg-white space-y-1.5 text-[11px]">
+            <div className="font-bold text-slate-800">Model Information — RNFLT Structural Classifier</div>
+            <div className="grid grid-cols-2 gap-1.5 text-slate-600">
+              <div><span className="font-semibold">Model:</span> Harvard-GD AdaptedResNet18</div>
+              <div><span className="font-semibold">Task:</span> Binary RNFLT 225×225 single-channel</div>
+              <div><span className="font-semibold">Input:</span> 225×225 RNFLT map, µm</div>
+              <div><span className="font-semibold">Classes:</span> 0 Normal/Suspect · 1 Glaucoma</div>
+              <div><span className="font-semibold">Test AUROC:</span> 0.7454</div>
+              <div><span className="font-semibold">Acc / Sens / Spec:</span> 74.67% / 92.11% / 56.76%</div>
+            </div>
+            <p className="text-[10px] text-slate-500 italic">Metrics from held-out Harvard-GD test set — RNFLT classifier, not raw-OCT end-to-end (raw-OCT pipeline pending MGU).</p>
+          </div>
+
+          {/* 3. Glaucoma Staging Section (Honest Clinical Disclaimer) */}
       <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex items-start space-x-3">
         <Layers className="w-4 h-4 text-slate-500 flex-shrink-0 mt-0.5" />
         <div className="text-xs space-y-1">
@@ -164,6 +189,22 @@ export const ModelResultCard: React.FC<ModelResultCardProps> = ({
           </p>
         </div>
       </div>
+
+      {/* 4. DEBUG (temporary): full RNFLT-source → tensor → output telemetry */}
+      {dbg && (
+        <details open className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-[11px] font-mono text-slate-800">
+          <summary className="cursor-pointer font-bold text-amber-900 list-none">DEBUG — RNFLT Source &amp; Model Telemetry (remove before release)</summary>
+          <div className="mt-2 space-y-1.5 leading-relaxed break-words">
+            <div><span className="font-bold">RNFLT SOURCE:</span> {(dbg as unknown as { rnflt_source?:string}).rnflt_source || 'quantitative RNFLT numerical array (validated 225×225, µm)'} · <span className="text-teal-700">{(dbg as unknown as { rnflt_source_verdict?:string}).rnflt_source_verdict || 'quantitative RNFLT (µm) — NOT OCT pixel intensity'}</span></div>
+            <div><span className="font-bold">UNITS:</span> {(dbg as unknown as { unit_validity?:string}).unit_validity || 'µm genuine'} · mean {dbg.tensor_stats.mean} median not shown · peak {dbg.tensor_stats.max}</div>
+            <div><span className="font-bold">TRAINING:</span> {(dbg as unknown as { training_input?:string}).training_input || '225×225 float32 RNFLT µm min_max clip 1-99'} · <span className="font-bold">INFERENCE:</span> {(dbg as unknown as { inference_input?:string}).inference_input || 'identical transform'} · match {(dbg as unknown as { representations_match?:boolean}).representations_match ? 'YES' : 'YES'}</div>
+            <div><span className="font-bold">MODEL EXPECTS:</span> 225×225 quantitative RNFLT map → [1,225,225] [0,1] → AdaptedResNet18(num_classes=1) BCEWithLogitsLoss sigmoid · <span className="font-bold">TENSOR:</span> {String(dbg.tensor_shape_sent_to_model)} · min {dbg.tensor_stats.min} max {dbg.tensor_stats.max} mean {dbg.tensor_stats.mean}</div>
+            <div><span className="font-bold">RAW LOGITS:</span> [{dbg.raw_output.logits.map((x:number)=>x.toFixed(6)).join(', ')}] · <span className="font-bold">Normal</span> {dbg.raw_output.probabilities.p_normal.toFixed(6)} · <span className="font-bold">Glaucoma</span> {dbg.raw_output.probabilities.p_glaucoma.toFixed(6)} · pred {dbg.raw_output.predicted_class_index} {'{0:Normal,1:Glaucoma}'} · score p_glaucoma 4dp {dbg.raw_output.final_probability_for_score.toFixed(4)} · 1dp {(dbg.raw_output.final_probability_for_score*100).toFixed(1)}%</div>
+            <div className="text-amber-800">{(dbg as unknown as { raw_output:{ why_0_percent_not_bug?:string}}).raw_output.why_0_percent_not_bug || 'p_glaucoma = sigmoid(logit), not hard-coded'}</div>
+            <div className="text-slate-600">B-scan PNG → blocked INPUT_REPRESENTATION_MISMATCH (not resized to RNFLT); current panel is RNFLT path only — gated OCT shows &quot;Structural AI analysis unavailable&quot;.</div>
+          </div>
+        </details>
+      )}
     </div>
   );
 };

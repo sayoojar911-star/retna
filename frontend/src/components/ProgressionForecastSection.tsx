@@ -75,10 +75,10 @@ export const ProgressionForecastSection: React.FC = () => {
           Longitudinal Forecast Inactive
         </h4>
         <p className="text-xs text-slate-500 max-w-md mt-1">
-          Longitudinal forecast unavailable until sufficient longitudinal follow-up data and a validated progression forecasting model are available.
+          24-month forecast unavailable — validated progression model not currently connected. Additional longitudinal data and a validated progression model are required.
         </p>
         <span className="text-[11px] text-slate-600 font-mono mt-2">
-          Strict policy: Zero synthetic trajectories or fabricated trend curves.
+          Strict policy: No synthetic trajectories or fabricated forecast data.
         </span>
       </div>
 

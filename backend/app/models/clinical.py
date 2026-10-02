@@ -52,6 +52,43 @@ class Patient(TimestampedModel):
     reports = relationship("ClinicalReport", back_populates="patient", cascade="all, delete-orphan")
     ai_analyses = relationship("AIAnalysis", back_populates="patient", cascade="all, delete-orphan")
     progression_assessments = relationship("ProgressionAssessment", back_populates="patient", cascade="all, delete-orphan")
+    visits = relationship("Visit", back_populates="patient", cascade="all, delete-orphan")
+
+
+class Visit(TimestampedModel):
+    __tablename__ = "visits"
+
+    visit_id = Column(String(64), unique=True, index=True, nullable=False)
+    patient_id = Column(String(64), ForeignKey("patients.patient_id", ondelete="CASCADE"), nullable=False, index=True)
+    visit_date = Column(String(32), nullable=False)
+    eye = Column(String(16), default="OD", nullable=False)
+    oct_reference = Column(String(512), nullable=True)
+    scan_id = Column(String(64), ForeignKey("scans.scan_id", ondelete="SET NULL"), nullable=True, index=True)
+    qc_status = Column(String(32), nullable=True)
+    qc_message = Column(Text, nullable=True)
+    rnfl_available = Column(Boolean, default=False, nullable=False)
+    mean_rnflt_um = Column(Float, nullable=True)
+    median_rnflt_um = Column(Float, nullable=True)
+    min_rnflt_um = Column(Float, nullable=True)
+    max_rnflt_um = Column(Float, nullable=True)
+    phys_mean_rnflt_um = Column(Float, nullable=True)
+    iop_mmhg = Column(Float, nullable=True)
+    iop_method = Column(String(64), nullable=True)
+    vf_md_db = Column(Float, nullable=True)
+    vf_psd_db = Column(Float, nullable=True)
+    vf_vfi_pct = Column(Float, nullable=True)
+    vf_reliability = Column(String(64), nullable=True)
+    model_name = Column(String(128), nullable=True)
+    model_version = Column(String(64), nullable=True)
+    predicted_class = Column(Integer, nullable=True)
+    predicted_category = Column(String(128), nullable=True)
+    classification_score = Column(Float, nullable=True)
+    gradcam_available = Column(Boolean, default=False, nullable=False)
+    analysis_timestamp = Column(String(32), nullable=True)
+    notes = Column(Text, default="", nullable=True)
+
+    patient = relationship("Patient", back_populates="visits")
+    scan = relationship("Scan")
 
 
 class Scan(TimestampedModel):

@@ -90,13 +90,16 @@ export interface RawOctAiAnalysis {
   analysis_available: boolean;
   reason: string;
   message: string;
+  rnflt_extraction?: { available: boolean; reason: string };
+  prevented_false_result?: boolean;
 }
 
 export interface OCTAnalysisResponse {
   is_valid: boolean;
   status: 'PASS' | 'FAIL';
   quality_status: string;
-  input_type?: 'rnflt_numeric' | 'raw_oct';
+  input_source?: string;
+  input_type?: 'rnflt_numeric' | 'raw_oct' | 'rnflt_image' | string;
   input_type_display?: string;
   message: string;
   filename?: string;
@@ -104,9 +107,9 @@ export interface OCTAnalysisResponse {
   patient_context?: PatientContext;
   validation_checks: ValidationCheck[];
   raw_oct_study?: RawOctStudyInfo;
-  ai_analysis?: RawOctAiAnalysis;
+  ai_analysis?: RawOctAiAnalysis & { rnflt_extraction?: { available: boolean; reason: string }; prevented_false_result?: boolean };
   rnflt_analysis?: RNFLTAnalysis;
-  model_result?: ModelResult;
+  model_result?: ModelResult | null;
   explainability?: ExplainabilityData;
   safety?: SafetyInfo;
   research_ground_truth?: {
@@ -320,6 +323,8 @@ export interface LongitudinalRNFLT {
   date: string;
   eye: string;
   mean_rnflt_um: number;
+  score?: number | null;
+  score_pct?: string | null;
 }
 
 export interface ClinicalReport {
@@ -346,6 +351,10 @@ export interface ClinicalScan {
   mean_rnflt_um?: number | null;
   demo_case_id?: string;
   notes?: string;
+  ai_result?: string;
+  score?: number | null;
+  score_pct?: string;
+  gradcam_available?: boolean;
 }
 
 export interface VisualFieldRecord {
@@ -369,11 +378,51 @@ export interface ProgressionRateInfo {
   message: string;
 }
 
+export interface VisitRecord {
+  visit_id: string;
+  id: string;
+  patient_id: string;
+  visit_date: string;
+  date: string;
+  eye: string;
+  oct_reference?: string | null;
+  scan_id?: string | null;
+  qc_status?: string | null;
+  qc_message?: string | null;
+  rnfl_available: boolean;
+  mean_rnflt_um?: number | null;
+  median_rnflt_um?: number | null;
+  min_rnflt_um?: number | null;
+  max_rnflt_um?: number | null;
+  phys_mean_rnflt_um?: number | null;
+  iop_mmhg?: number | null;
+  iop_method?: string | null;
+  vf_md_db?: number | null;
+  vf_psd_db?: number | null;
+  vf_vfi_pct?: number | null;
+  vf_reliability?: string | null;
+  model_name?: string | null;
+  model_version?: string | null;
+  predicted_class?: number | null;
+  predicted_category?: string | null;
+  classification_score?: number | null;
+  gradcam_available: boolean;
+  analysis_timestamp?: string | null;
+  notes?: string | null;
+}
+
 export interface PatientProgressionResponse {
   patient_id: string;
   rnflt_progression: ProgressionRateInfo;
   visual_field_progression: ProgressionRateInfo;
   clinical_notice: string;
+  forecast?: { available: boolean; status: string; message: string; horizons: number[]; trajectory: Array<{ horizon_months: number; estimated_rnflt_um: number | null; lower_bound_um: number | null; upper_bound_um: number | null; confidence_level?: number }>; uncertainty_method?: string | null; model_name?: string; clinical_notice?: string };
+  stage?: { available: boolean; status: string; message: string; stage_label?: string | null; stage_code?: number | null; confidence?: number | null; staging_system?: string };
+  risk_alerts?: Array<{ level: string; title: string; detail: string; triggered_by: string; value?: number | null; threshold?: number | null }>;
+  rnflt_trend?: Array<{ date: string; mean_rnflt_um: number }>;
+  score_trend?: Array<{ date: string; score: number; score_pct: string }>;
+  iop_trend?: Array<{ date: string; iop_mmhg: number }>;
+  vf_trend?: Array<{ date: string; md_db: number }>;
 }
 
 export interface ForecastResponse {

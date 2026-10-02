@@ -124,7 +124,7 @@ export const RawOctResultCard: React.FC<RawOctResultCardProps> = ({
               </span>
             </div>
             <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-              Study imported. The current trained Harvard-GD ResNet-18 model is trained strictly on quantitative peripapillary Retinal Nerve Fiber Layer Thickness (RNFLT) numerical maps. Raw cross-sectional B-scan intensity images cannot be fed directly into the RNFLT model without automated thickness segmentation.
+              Study imported successfully. RNFLT extraction unavailable. Structural AI analysis cannot be performed on this OCT study until a validated OCT→RNFLT extraction model is connected. Analysis status: Unavailable — RNFLT extraction required. The trained Harvard-GD ResNet-18 strictly requires a 225×225 quantitative RNFLT numerical map.
             </p>
           </div>
         </div>

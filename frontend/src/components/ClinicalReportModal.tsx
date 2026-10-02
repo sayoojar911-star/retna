@@ -29,7 +29,7 @@ export const ClinicalReportModal: React.FC<ClinicalReportModalProps> = ({
   // Real or derived statistics
   const scorePct =
     activeAnalysis?.model_result?.model_estimated_classification_score_pct ||
-    (scan?.score ? `${scan.score}%` : '88.5%');
+    (scan?.score ? `${scan.score}%` : 'N/A');
   const isGlaucoma =
     activeAnalysis?.model_result?.predicted_class === 1 ||
     (scan?.ai_result ? scan.ai_result.includes('Glaucoma') : true);

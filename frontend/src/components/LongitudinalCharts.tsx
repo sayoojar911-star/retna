@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingDown, Activity, Info, Calendar, ArrowRightLeft, Layers, ShieldAlert } from 'lucide-react';
+import { TrendingDown, Info, Calendar, ArrowRightLeft, Layers, ShieldAlert } from 'lucide-react';
 import {
   IOPRecord,
   LongitudinalRNFLT,
@@ -33,7 +33,8 @@ export const LongitudinalCharts: React.FC<LongitudinalChartsProps> = ({
   const [selectedEye, setSelectedEye] = useState<'ALL' | 'OD' | 'OS'>('ALL');
   const [dateFilter, setDateFilter] = useState<'ALL' | '7D' | '30D' | '3M' | '6M' | '12M'>('ALL');
   const [progressionData, setProgressionData] = useState<PatientProgressionResponse | null>(null);
-  const [comparisonData, setComparisonData] = useState<ClinicalComparisonResponse | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_comparisonData, setComparisonData] = useState<ClinicalComparisonResponse | null>(null);
   const [prevScanIdx, setPrevScanIdx] = useState<number>(1);
   const [currScanIdx, setCurrScanIdx] = useState<number>(0);
 
@@ -92,8 +93,8 @@ export const LongitudinalCharts: React.FC<LongitudinalChartsProps> = ({
           date: s.date,
           mean_rnflt_um: s.mean_rnflt_um,
           eye: s.eye,
-          score: s.score || 88.5,
-          score_pct: s.score_pct || `${s.score || 88.5}%`,
+          score: s.score ?? 50,
+          score_pct: s.score_pct || (s.score != null ? `${s.score}%` : 'N/A'),
         });
       }
     });
@@ -103,8 +104,8 @@ export const LongitudinalCharts: React.FC<LongitudinalChartsProps> = ({
         date: r.date,
         mean_rnflt_um: r.mean_rnflt_um,
         eye: r.eye,
-        score: 85.0,
-        score_pct: '85.0%',
+          score: (r.score as unknown as number | undefined) ?? undefined,
+          score_pct: (r.score_pct as unknown as string | undefined) || 'N/A',
       });
     });
   }
@@ -119,14 +120,39 @@ export const LongitudinalCharts: React.FC<LongitudinalChartsProps> = ({
     .filter((r) => r.score !== undefined)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  // Filter IOP points
-  const filteredIop = iopRecords
+  // Filter IOP points: fall back to progression API data when explicit props are empty
+  // (prevents "No longitudinal IOP data available" when records exist in the backend)
+  const apiIop = (progressionData as any)?.iop_trend || [];
+  const effectiveIop: IOPRecord[] =
+    iopRecords.length > 0
+      ? iopRecords
+      : apiIop.map((p: any, idx: number) => ({
+          id: `api-iop-${idx}`,
+          patient_id: patientId,
+          date: p.date,
+          eye: selectedEye === 'ALL' ? (p.eye || eye) : (p.eye || eye),
+          iop_mmhg: p.iop_mmhg,
+          method: p.method || 'Goldmann Applanation',
+        }));
+  const filteredIop = effectiveIop
     .filter((i) => (selectedEye === 'ALL' ? true : i.eye === selectedEye))
     .filter((i) => isWithinDateFilter(i.date))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  // Filter Visual Field points
-  const filteredVf = visualFieldRecords
+  // Filter Visual Field points: same fallback to progression API response
+  const apiVf = (progressionData as any)?.vf_trend || [];
+  const effectiveVf: VisualFieldRecord[] =
+    visualFieldRecords.length > 0
+      ? visualFieldRecords
+      : apiVf.map((p: any, idx: number) => ({
+          id: `api-vf-${idx}`,
+          patient_id: patientId,
+          date: p.date,
+          eye: p.eye || eye,
+          md_db: p.md_db,
+          reliability: 'Reliable',
+        }));
+  const filteredVf = effectiveVf
     .filter((v) => (selectedEye === 'ALL' ? true : v.eye === selectedEye))
     .filter((v) => isWithinDateFilter(v.date))
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -705,26 +731,203 @@ export const LongitudinalCharts: React.FC<LongitudinalChartsProps> = ({
         </div>
       )}
 
-      {/* 6. Forecast & Glaucoma Stage Readiness Notice */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
-          <div className="font-bold text-slate-800 flex items-center space-x-1.5">
-            <Layers className="w-4 h-4 text-slate-500" />
-            <span>24-Month Progression Forecast</span>
+      {/* 6a. EARLY RISK ALERTS */}
+      {progressionData?.risk_alerts && progressionData.risk_alerts.length > 0 && (
+        <div className="bg-white border border-amber-200 rounded-2xl p-5 shadow-sm space-y-3">
+          <h3 className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-1.5">
+            <ShieldAlert className="w-4 h-4" /> Early Risk Alerts
+            <span className="ml-2 text-[10px] font-normal normal-case text-slate-500">Research alerts — clinical correlation required</span>
+          </h3>
+          <div className="space-y-2">
+            {progressionData.risk_alerts.map((a: any, i: number) => (
+              <div key={i} className={`p-3 rounded-xl border text-xs ${a.level === 'critical' ? 'bg-rose-50 border-rose-200 text-rose-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                <div className="font-bold">{a.level === 'critical' ? '● Critical' : '▲ Warning'}: {a.title}</div>
+                <div className="text-[11px] mt-0.5 leading-relaxed opacity-90">{a.detail}</div>
+              </div>
+            ))}
           </div>
-          <p className="text-[11px] text-slate-600 leading-relaxed">
-            24-month forecast unavailable. Additional longitudinal data and a validated progression model are required.
-          </p>
+        </div>
+      )}
+
+      {/* 6b. INTEGRATED PROGRESSION HEATMAP (observation matrix, not a diagnosis) */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div>
+            <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+              Integrated Progression Map
+            </h3>
+            <p className="text-[10px] text-slate-500">
+              Compact observation matrix across measurement types and examination dates. Colors show observed values, not a diagnosis.
+            </p>
+          </div>
+          <span className="text-[11px] text-slate-500 font-mono">
+            Legend: teal = normal range · amber = borderline · rose = abnormal/flagged · slate = no data
+          </span>
+        </div>
+        {(() => {
+          const dates = Array.from(
+            new Set([
+              ...filteredRnflt.map((r) => r.date),
+              ...filteredIop.map((i) => i.date),
+              ...filteredVf.map((v) => v.date),
+            ])
+          ).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+          const rnfltByDate = new Map(filteredRnflt.map((r) => [r.date, r.mean_rnflt_um]));
+          const iopByDate = new Map(filteredIop.map((i) => [i.date, i.iop_mmhg]));
+          const vfByDate = new Map(filteredVf.map((v) => [v.date, v.md_db]));
+          const scoreByDate = new Map(filteredScores.map((s) => [s.date, s.score]));
+          const cell = (val: number | undefined | null, kind: 'rnflt' | 'iop' | 'vf' | 'score') => {
+            if (val === undefined || val === null) {
+              return { label: '—', cls: 'bg-slate-100 text-slate-400 border-slate-200' };
+            }
+            if (kind === 'rnflt') {
+              const cls = val >= 80 ? 'bg-teal-50 text-teal-800 border-teal-200' : val >= 65 ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-rose-50 text-rose-800 border-rose-200';
+              return { label: `${val} µm`, cls };
+            }
+            if (kind === 'iop') {
+              const cls = val <= 18 ? 'bg-teal-50 text-teal-800 border-teal-200' : val <= 21 ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-rose-50 text-rose-800 border-rose-200';
+              return { label: `${val}`, cls };
+            }
+            if (kind === 'vf') {
+              const cls = val >= -2 ? 'bg-teal-50 text-teal-800 border-teal-200' : val >= -6 ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-rose-50 text-rose-800 border-rose-200';
+              return { label: `${val} dB`, cls };
+            }
+            const cls = val < 50 ? 'bg-teal-50 text-teal-800 border-teal-200' : val < 75 ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-rose-50 text-rose-800 border-rose-200';
+            return { label: `${val}%`, cls };
+          };
+          const rows: Array<{ label: string; kind: 'rnflt' | 'iop' | 'vf' | 'score'; byDate: Map<string, any> }> = [
+            { label: 'RNFLT (µm)', kind: 'rnflt', byDate: rnfltByDate },
+            { label: 'IOP (mmHg)', kind: 'iop', byDate: iopByDate },
+            { label: 'Visual Field MD (dB)', kind: 'vf', byDate: vfByDate },
+            { label: 'AI Score (%)', kind: 'score', byDate: scoreByDate },
+          ];
+          if (dates.length === 0) {
+            return (
+              <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-300 rounded-xl bg-slate-50/50">
+                No longitudinal measurements available for the selected patient/eye/date range.
+              </div>
+            );
+          }
+          return (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[520px]">
+                <thead>
+                  <tr className="text-slate-500 uppercase text-[10px] tracking-wider font-semibold border-b border-slate-200">
+                    <th className="pb-2 pr-3">Measure</th>
+                    {dates.map((d) => (
+                      <th key={d} className="pb-2 px-2 font-mono font-medium text-slate-700">{d}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((row) => (
+                    <tr key={row.label}>
+                      <td className="py-2 pr-3 font-semibold text-slate-800 whitespace-nowrap">{row.label}</td>
+                      {dates.map((d) => {
+                        const c = cell(row.byDate.get(d), row.kind);
+                        return (
+                          <td key={d} className="py-1.5 px-2">
+                            <span className={`inline-block min-w-[86px] text-center px-2 py-1 rounded-lg border font-mono text-[11px] ${c.cls}`}>
+                              {c.label}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[10px] text-slate-500 mt-2 italic">
+                Observation tool only. Cell colors reflect recorded value ranges; they do not establish a diagnosis. Clinical correlation required.
+              </p>
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* 7. LONGITUDINAL SUMMARY (observed facts only) */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
+        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider pb-2 border-b border-slate-100">
+          Longitudinal Summary — Observed Pattern
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <span className="text-[10px] text-slate-500 uppercase font-semibold">Structural (RNFLT)</span>
+            <p className="text-slate-800 mt-1 leading-relaxed">
+              {filteredRnflt.length >= 2
+                ? `RNFLT measurements ${filteredRnflt[filteredRnflt.length - 1].mean_rnflt_um < filteredRnflt[0].mean_rnflt_um ? 'decreased' : 'changed'} between the available examinations (${filteredRnflt[0].date}: ${filteredRnflt[0].mean_rnflt_um} µm → ${filteredRnflt[filteredRnflt.length - 1].date}: ${filteredRnflt[filteredRnflt.length - 1].mean_rnflt_um} µm; observed change ${rnfltChangeDisplay}).`
+                : 'Additional longitudinal scans are required to describe an RNFLT trend.'}
+            </p>
+          </div>
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <span className="text-[10px] text-slate-500 uppercase font-semibold">Pressure (IOP)</span>
+            <p className="text-slate-800 mt-1 leading-relaxed">
+              {filteredIop.length >= 2
+                ? `IOP measurements ranged from ${Math.min(...filteredIop.map((i) => i.iop_mmhg))}–${Math.max(...filteredIop.map((i) => i.iop_mmhg))} mmHg across ${filteredIop.length} examinations (observed change ${iopChangeDisplay}).`
+                : filteredIop.length === 1
+                ? `Single IOP measurement recorded (${filteredIop[0].date}: ${filteredIop[0].iop_mmhg} mmHg). Additional measurements required for a trend.`
+                : 'IOP history unavailable for the selected range.'}
+            </p>
+          </div>
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <span className="text-[10px] text-slate-500 uppercase font-semibold">Functional (Visual Field MD)</span>
+            <p className="text-slate-800 mt-1 leading-relaxed">
+              {filteredVf.length >= 2
+                ? `Visual Field MD measurements changed from ${filteredVf[0].md_db} dB (${filteredVf[0].date}) to ${filteredVf[filteredVf.length - 1].md_db} dB (${filteredVf[filteredVf.length - 1].date}; observed change ${vfChangeDisplay}).`
+                : filteredVf.length === 1
+                ? `Single visual-field measurement (${filteredVf[0].date}: ${filteredVf[0].md_db} dB). Additional visual-field measurements required.`
+                : 'Visual-field history unavailable for the selected range.'}
+            </p>
+          </div>
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80">
+            <span className="text-[10px] text-slate-500 uppercase font-semibold">AI Model Estimate</span>
+            <p className="text-slate-800 mt-1 leading-relaxed">
+              {filteredScores.length >= 2 && filteredScores[0].score !== undefined
+                ? `Model-estimated scores moved from ${filteredScores[0].score_pct} to ${filteredScores[filteredScores.length - 1].score_pct} (observed longitudinal model-estimate trend ${aiScoreChangeDisplay}). Research model estimate — not a clinical diagnosis.`
+                : 'No longitudinal model-estimate trend available for the selected range.'}
+            </p>
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-600 italic border-t border-slate-100 pt-3">
+          Observed longitudinal pattern — factual summary of recorded measurements only. Clinical correlation required. GlaucoMap does not replace ophthalmological diagnosis or treatment decisions.
+        </p>
+      </div>
+
+      {/* 8. 24-Month Trajectory (research estimate) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl space-y-2">
+          <div className="font-bold text-slate-800 flex items-center justify-between">
+            <span className="flex items-center gap-1.5"><Layers className="w-4 h-4 text-slate-500" /> 24-Month Progression Forecast</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${progressionData?.forecast?.available ? 'bg-teal-50 text-teal-800 border-teal-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>{progressionData?.forecast?.available ? 'Research estimate' : 'Unavailable'}</span>
+          </div>
+          {progressionData?.forecast?.available && progressionData.forecast.trajectory?.length ? (
+            <div className="space-y-2">
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px] border border-slate-200 rounded-xl overflow-hidden">
+                  <thead className="bg-slate-50 text-slate-600"><tr><th className="p-1.5 text-left">Horizon</th><th className="p-1.5">RNFLT est.</th><th className="p-1.5">95% band</th></tr></thead>
+                  <tbody>{progressionData.forecast.trajectory.map((t: any) => (<tr key={t.horizon_months} className="border-t border-slate-100"><td className="p-1.5 font-mono">{t.horizon_months} mo</td><td className="p-1.5 font-mono text-center">{t.estimated_rnflt_um} µm</td><td className="p-1.5 font-mono text-center text-slate-600">{t.lower_bound_um} – {t.upper_bound_um}</td></tr>))}</tbody>
+                </table>
+              </div>
+              <p className="text-[10px] text-slate-500 italic">{progressionData.forecast.message} — {progressionData.forecast.model_name}</p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-600 leading-relaxed">{progressionData?.forecast?.message || '24-month forecast unavailable. Additional longitudinal data and a validated progression model are required.'}</p>
+          )}
         </div>
 
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5">
-          <div className="font-bold text-slate-800 flex items-center space-x-1.5">
-            <ShieldAlert className="w-4 h-4 text-slate-500" />
-            <span>Glaucoma Stage Assessment</span>
+        <div className="p-4 bg-white border border-slate-200 rounded-2xl space-y-2">
+          <div className="font-bold text-slate-800 flex items-center justify-between">
+            <span className="flex items-center gap-1.5"><ShieldAlert className="w-4 h-4 text-slate-500" /> Glaucoma Stage Assessment</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${progressionData?.stage?.available ? 'bg-teal-50 text-teal-800 border-teal-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>{progressionData?.stage?.available ? (progressionData.stage.stage_label || 'Estimate') : 'Unavailable'}</span>
           </div>
-          <p className="text-[11px] text-slate-600 leading-relaxed">
-            Stage assessment unavailable. The current trained model produces a binary glaucoma-associated estimate. Clinical correlation required.
-          </p>
+          {progressionData?.stage?.available ? (
+            <div className="space-y-1">
+              <div className="text-sm font-bold text-slate-900">{progressionData.stage.stage_label} <span className="text-xs font-normal text-slate-500">({progressionData.stage.staging_system})</span></div>
+              <p className="text-[11px] text-slate-600 leading-relaxed">{progressionData.stage.message} {progressionData.stage.confidence != null ? `Confidence ~${(progressionData.stage.confidence * 100).toFixed(0)}%.` : ''}</p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-slate-600 leading-relaxed">{progressionData?.stage?.message || 'Stage assessment unavailable. The current structural model provides binary classification only. Clinical correlation required.'}</p>
+          )}
         </div>
       </div>
     </div>

@@ -9,6 +9,24 @@ before quantitative thickness tensors can be derived.
 This module defines the abstract interface and plug-in contracts for prospective
 deep learning segmentation models (e.g. U-Net / RelayNet / SAM-OCT) while safely
 preventing unsegmented raw optical scans from being ingested as thickness maps.
+
+Required RNFLT output contract (Harvard-GD compatibility):
+  shape:          (225, 225) exact, 2-D
+  dtype:          float32
+  units:          micrometers (um)
+  finite:         no NaN / Inf, non-zero variance
+  value range:    typically ~0-250 um (dataset: ~ -2 to ~ 180; negatives are sentinels)
+  preprocessing:  OCTPreprocessTransform(target_size=(225,225), normalize_mode="min_max",
+                  clip_percentiles=(1.0,99.0), num_channels=1) -> tensor [1,225,225] in [0,1]
+  eye:            OD/OS string passed through; model input is eye-agnostic
+  missing:        optic disc canal masked to 0.0 (negative sentinels clamped before norm)
+
+Adapter pipeline:
+  OCT image -> OCTToRNFLTExtractor.extract() -> np.ndarray (225,225) float32 um
+           -> OCTPreprocessTransform -> torch.Tensor [1,225,225] -> Harvard-GD CNN -> Grad-CAM
+
+Status when no extractor deployed:
+  "RNFLT extraction model required" / "RNFLT extraction is not currently available for this OCT study."
 """
 
 from abc import ABC, abstractmethod
@@ -19,6 +37,12 @@ import numpy as np
 from PIL import Image
 
 from ml.preprocessing.schema import Modality, QualityStatus
+
+
+class RNFLTExtractionStatus:
+    EXTRACTION_REQUIRED = "EXTRACTION_REQUIRED"
+    MODEL_REQUIRED = "RNFLT_EXTRACTION_MODEL_REQUIRED"
+    SUCCESS = "SUCCESS"
 
 
 @dataclass
@@ -32,10 +56,23 @@ class ExtractionResult:
     segmentation_mask: Optional[np.ndarray] = None
     requires_clinical_review: bool = True
     metadata: Dict[str, Any] = field(default_factory=dict)
+    required_contract: Dict[str, Any] = field(default_factory=lambda: dict(
+        shape=(225, 225),
+        dtype="float32",
+        units="micrometers",
+        range_um="0-250",
+        preprocessing="OCTPreprocessTransform(target_size=(225,225), normalize_mode='min_max', clip=(1,99), channels=1) -> [1,225,225] in [0,1]",
+        eye="OD|OS preserved",
+        missing_handling="disc canal -> 0.0; negatives clamped before norm",
+    ))
 
 
 class OCTToRNFLTExtractor(ABC):
     """Abstract base class for OCT layer segmentation and RNFLT extraction engines."""
+
+    required_output_shape: Tuple[int, int] = (225, 225)
+    required_dtype = "float32"
+    required_units = "micrometers"
 
     @property
     @abstractmethod
@@ -57,12 +94,30 @@ class OCTToRNFLTExtractor(ABC):
 
     @abstractmethod
     def extract(self, image: Union[str, Path, Image.Image, np.ndarray], eye: str = "OD") -> ExtractionResult:
-        """Extract continuous 2D RNFL thickness numerical array from an OCT scan."""
+        """Extract continuous 2D RNFL thickness numerical array from an OCT scan.
+
+        Must return np.ndarray shape (225,225) dtype float32 in micrometers, finite,
+        non-zero variance, disc canal masked to 0.0. See module docstring for full contract.
+        """
         pass
 
     def extract_rnflt_map(self, oct_study_path: Union[str, Path], eye: str = "OD") -> ExtractionResult:
         """Backward-compatible alias for extract()."""
         return self.extract(oct_study_path, eye=eye)
+
+    @staticmethod
+    def validate_contract(arr: np.ndarray) -> Tuple[bool, str]:
+        if not isinstance(arr, np.ndarray):
+            return False, "not an ndarray"
+        if arr.shape != (225, 225):
+            return False, f"shape {arr.shape} != (225,225)"
+        if arr.dtype != np.float32:
+            return False, f"dtype {arr.dtype} != float32"
+        if not np.all(np.isfinite(arr)):
+            return False, "non-finite values"
+        if np.min(arr) == np.max(arr):
+            return False, "zero variance"
+        return True, "ok"
 
 
 # Alias for backward compatibility
@@ -75,6 +130,12 @@ class StubOCTToRNFLTExtractor(OCTToRNFLTExtractor):
     Enforces the clinical safety rule:
     Does NOT fabricate segmentation or downsample raw B-scans to fake RNFLT maps.
     Transparently informs the clinician and system that layer extraction is unavailable.
+
+    To plug in a genuine pretrained OCT segmentation model later:
+      1. Subclass OCTToRNFLTExtractor and load weights in __init__.
+      2. Set is_available / is_validated True and implement extract() per contract.
+      3. Replace the oct_extractor instance in backend/app/api/endpoints/oct.py.
+    No Harvard-GD CNN, preprocessing, or frontend changes are required.
     """
 
     @property
@@ -97,7 +158,7 @@ class StubOCTToRNFLTExtractor(OCTToRNFLTExtractor):
         input_path_str = str(image) if isinstance(image, (str, Path)) else "<in-memory-image>"
         return ExtractionResult(
             success=False,
-            status="EXTRACTION_REQUIRED",
+            status=RNFLTExtractionStatus.EXTRACTION_REQUIRED,
             message="RNFLT extraction is not currently available for this OCT study.",
             rnflt_map=None,
             mean_thickness_um=None,
@@ -106,10 +167,16 @@ class StubOCTToRNFLTExtractor(OCTToRNFLTExtractor):
                 "input_source": input_path_str,
                 "eye": eye,
                 "extractor_available": False,
+                "required_rnflt_contract": {
+                    "shape": (225, 225),
+                    "dtype": "float32",
+                    "units": "micrometers",
+                    "preprocessing": "OCTPreprocessTransform -> [1,225,225] tensor in [0,1]",
+                },
                 "reason": (
-                    "The Harvard-GD classifier strictly operates on 225x225 quantitative RNFLT thickness maps. "
-                    "A validated retinal layer segmentation model must be plugged in to derive thickness maps "
-                    "from raw B-scans."
+                    "Harvard-GD CNN requires 225x225 quantitative RNFLT thickness map in micrometers. "
+                    "Install a validated OCT-to-RNFLT segmentation model (e.g. U-Net, RelayNet, SAM-OCT) "
+                    "to derive thickness maps from raw B-scans."
                 ),
             },
         )

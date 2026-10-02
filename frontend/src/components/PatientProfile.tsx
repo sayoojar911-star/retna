@@ -17,13 +17,16 @@ import {
 } from '../types';
 import { PatientTimeline } from './PatientTimeline';
 import { LongitudinalCharts } from './LongitudinalCharts';
+import { VisitHistory } from './VisitHistory';
+import { AddVisitModal } from './AddVisitModal';
 import { AddIOPModal } from './AddIOPModal';
 import { AddReportModal } from './AddReportModal';
 import { AddVisualFieldModal } from './AddVisualFieldModal';
 import { ModelResultCard } from './ModelResultCard';
 import { ExplainabilitySection } from './ExplainabilitySection';
 import { RNFLTAnalysisCard } from './RNFLTAnalysisCard';
-import { ClinicalReportModal } from './ClinicalReportModal';
+import { RawOctResultCard } from './RawOctResultCard';
+// ClinicalReportModal not used here; reports viewed via ReportsLibrary
 
 interface PatientProfileProps {
   patientId: string;
@@ -46,15 +49,15 @@ export const PatientProfile: React.FC<PatientProfileProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [subTab, setSubTab] = useState<
-    'timeline' | 'overview' | 'scans' | 'iop' | 'visual_field' | 'reports' | 'progression' | 'analysis'
+    'timeline' | 'visits' | 'overview' | 'scans' | 'iop' | 'visual_field' | 'reports' | 'progression' | 'analysis'
   >('timeline');
 
   // Modals state
   const [isIopModalOpen, setIsIopModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isVisitOpen, setIsVisitOpen] = useState(false);
   const [isVfModalOpen, setIsVfModalOpen] = useState(false);
-  const [isReportViewerOpen, setIsReportViewerOpen] = useState(false);
-  const [selectedScanForReport, setSelectedScanForReport] = useState<ClinicalScan | null>(null);
+  // Report viewer state removed (unused)
 
   // Fetch full patient profile from backend
   const fetchProfile = useCallback(async () => {
@@ -172,7 +175,7 @@ export const PatientProfile: React.FC<PatientProfileProps> = ({
           </div>
 
           {/* Right: Quick Study Actions */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 flex-wrap gap-1.5">
             <button
               onClick={() => onOpenImportModalForPatient(patient.id)}
               className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-sm transition flex items-center space-x-1.5 cursor-pointer"
@@ -180,6 +183,7 @@ export const PatientProfile: React.FC<PatientProfileProps> = ({
               <Upload className="w-3.5 h-3.5" />
               <span>Import OCT Study</span>
             </button>
+            <button onClick={() => setIsVisitOpen(true)} className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-semibold shadow-sm transition cursor-pointer">+ New Visit</button>
             <button
               onClick={() => setIsIopModalOpen(true)}
               className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 text-xs font-medium transition cursor-pointer"
@@ -256,6 +260,7 @@ export const PatientProfile: React.FC<PatientProfileProps> = ({
           <nav className="flex items-center space-x-1 overflow-x-auto pb-1 border-t border-slate-100 pt-3">
             {[
               { id: 'timeline', label: 'Timeline', icon: Clock },
+              { id: 'visits', label: 'Visits', icon: FileText },
               { id: 'overview', label: 'Overview', icon: Info },
               { id: 'scans', label: `Scans (${scans.length})`, icon: Eye },
               { id: 'analysis', label: 'AI Analysis', icon: Sparkles },
@@ -355,6 +360,11 @@ export const PatientProfile: React.FC<PatientProfileProps> = ({
         </div>
       )}
 
+      {/* TAB VISITS: longitudinal visit ledger */}
+      {subTab === 'visits' && (
+        <VisitHistory patientId={patient.id} apiBaseUrl={apiBaseUrl} onAddVisit={() => setIsVisitOpen(true)} />
+      )}
+
       {/* TAB C: SCANS */}
       {subTab === 'scans' && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
@@ -428,34 +438,51 @@ export const PatientProfile: React.FC<PatientProfileProps> = ({
       {/* TAB D: AI ANALYSIS */}
       {subTab === 'analysis' && (
         <div className="space-y-6">
-          {activeAnalysis ? (
-            <>
-              <ModelResultCard
-                modelResult={activeAnalysis.model_result}
-                patientContext={activeAnalysis.patient_context}
-                groundTruth={activeAnalysis.research_ground_truth}
-                staging={activeAnalysis.staging}
-              />
-
-              {activeAnalysis.is_valid && activeAnalysis.rnflt_analysis && (
-                <RNFLTAnalysisCard
-                  analysis={activeAnalysis.rnflt_analysis}
-                  patientId={patient.id}
-                  eye={patient.eye_laterality || 'OD'}
+          {(() => {
+            const blocked = Boolean(activeAnalysis && (activeAnalysis.input_type === 'raw_oct' || activeAnalysis.ai_analysis?.rnflt_extraction?.available === false || activeAnalysis.model_result === null));
+            if (blocked && activeAnalysis) {
+              return (
+                <RawOctResultCard
+                  rawStudy={activeAnalysis.raw_oct_study}
+                  aiAnalysis={activeAnalysis.ai_analysis}
+                  patientContext={activeAnalysis.patient_context}
+                  filename={activeAnalysis.filename}
                 />
-              )}
-
-              <ExplainabilitySection
-                originalHeatmap={activeAnalysis.rnflt_analysis?.heatmap_image}
-                explainability={activeAnalysis.explainability}
-              />
-            </>
-          ) : (
+              );
+            }
+            if (activeAnalysis) {
+              return (
+                <>
+                  <ModelResultCard
+                    modelResult={activeAnalysis.model_result!}
+                    patientContext={activeAnalysis.patient_context}
+                    groundTruth={activeAnalysis.research_ground_truth}
+                    staging={activeAnalysis.staging}
+                  />
+                  {activeAnalysis.is_valid && activeAnalysis.rnflt_analysis && activeAnalysis.model_result && (
+                    <RNFLTAnalysisCard
+                      analysis={activeAnalysis.rnflt_analysis}
+                      patientId={patient.id}
+                      eye={patient.eye_laterality || 'OD'}
+                    />
+                  )}
+                  {activeAnalysis.rnflt_analysis && activeAnalysis.model_result && (
+                    <ExplainabilitySection
+                      originalHeatmap={activeAnalysis.rnflt_analysis?.heatmap_image}
+                      explainability={activeAnalysis.explainability}
+                    />
+                  )}
+                </>
+              );
+            }
+            return null;
+          })()}
+          {!activeAnalysis && (
             <div className="p-10 bg-white border border-slate-200 rounded-2xl text-center space-y-3 shadow-sm">
               <Sparkles className="w-9 h-9 text-teal-600 mx-auto" />
               <h4 className="text-sm font-bold text-slate-900">No Active Analysis Loaded</h4>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Select a scan from the patient's timeline or scans repository to view structural AI classification and Grad-CAM visual explainability.
+                Select a scan from the patient&apos;s timeline or scans repository to view structural AI classification and Grad-CAM visual explainability.
               </p>
               {scans.length > 0 && (
                 <button
@@ -469,8 +496,6 @@ export const PatientProfile: React.FC<PatientProfileProps> = ({
           )}
         </div>
       )}
-
-      {/* TAB E: IOP */}
       {subTab === 'iop' && (
         <div className="space-y-6">
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
@@ -628,11 +653,25 @@ export const PatientProfile: React.FC<PatientProfileProps> = ({
             eye={patient.eye_laterality || 'OD'}
             apiBaseUrl={apiBaseUrl}
             scans={scans}
+            iopRecords={iop_records}
+            visualFieldRecords={visual_field_records}
+            longitudinalRnflt={profileData.longitudinal_rnflt}
           />
         </div>
       )}
 
       {/* Modals */}
+      <AddVisitModal
+        isOpen={isVisitOpen}
+        onClose={() => setIsVisitOpen(false)}
+        patientId={patient.id}
+        apiBaseUrl={apiBaseUrl}
+        defaultEye={patient.eye_laterality || 'OD'}
+        onSuccess={() => {
+          setIsVisitOpen(false);
+          fetchProfile();
+        }}
+      />
       <AddIOPModal
         isOpen={isIopModalOpen}
         onClose={() => setIsIopModalOpen(false)}

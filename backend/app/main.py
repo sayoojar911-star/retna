@@ -37,6 +37,7 @@ app.include_router(clinical.router, prefix="/api/v1")
 app.add_api_route("/api/analyze", oct.analyze_oct_study, methods=["POST"], tags=["Analysis"])
 app.add_api_route("/api/demo-cases", oct.get_demo_cases, methods=["GET"], tags=["OCT Analysis"])
 app.add_api_route("/api/model/status", model.get_model_status, methods=["GET"], tags=["Model Status"])
+app.add_api_route("/api/model/diagnostics", model.diagnostics, methods=["GET"], tags=["Model Status"])
 app.add_api_route("/api/scans/upload", oct.upload_scan_handler, methods=["POST"], tags=["OCT Analysis"])
 app.add_api_route("/api/scans/{scan_id}/analyze", oct.analyze_existing_scan_handler, methods=["POST"], tags=["OCT Analysis"])
 
@@ -46,9 +47,12 @@ app.include_router(clinical.router, prefix="/api")
 app.include_router(clinical.direct_router, prefix="/api")
 
 import os
+from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 os.makedirs("data/uploads/photos", exist_ok=True)
 app.mount("/api/uploads/photos", StaticFiles(directory="data/uploads/photos"), name="photos")
+os.makedirs("data/demo_samples", exist_ok=True)
+app.mount("/api/demo-samples", StaticFiles(directory="data/demo_samples"), name="demo-samples")
 
 
 @app.get("/", tags=["Root"])
